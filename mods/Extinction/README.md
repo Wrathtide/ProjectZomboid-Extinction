@@ -4,6 +4,15 @@
 
 The mod is intended for a **new world** and is compatible with **Project A-Life [ALIFE NPCS]**.
 
+## Inspiration
+
+The atmosphere and premise were inspired by two post-apocalyptic novels:
+
+- Stephen King's **The Stand** (published in Polish as **Bastion**),
+- Robert J. Szmidt's **Samotność Anioła Zagłady** (later republished as **Samotność Anioła Zagłady. Adam**).
+
+Extinction is an independent fan-made project. It is not an adaptation, contains no text, characters, artwork, or other assets from either novel, and is not affiliated with or endorsed by the authors, their publishers, The Indie Stone, or Valve.
+
 ## Main features
 
 - Gradual extinction of all ordinary zombies.
@@ -124,6 +133,12 @@ Any object carrying one of these markers is excluded completely:
 
 Unmarked ordinary zombies—whether created by vanilla, Project A-Life, or another mod—follow the normal extinction schedule. Project A-Life is optional; Extinction also works by itself.
 
+## Recommended NPC companions
+
+Extinction deliberately turns the late game into a quiet, sparsely populated world. It works best alongside an NPC mod so that human stories, encounters, and danger remain after the zombie population has died out.
+
+Compatibility has been specifically implemented and checked for **Project A-Life [ALIFE NPCS]**. Other NPC mods may also work, but they have not been verified and must not expose their human characters as unmarked ordinary zombies.
+
 ## Custom sandbox options
 
 Enabling the mod adds an **Extinction** page to the sandbox settings.
@@ -181,6 +196,12 @@ mods/Extinction/42.20/
             └── PL/Sandbox.json
 ```
 
-## Privacy
+## Authorship and AI disclosure
 
-The source repository and the initial Steam Workshop item are private. The project contains no credentials, Steam session data, save files, or personal data.
+The project's original idea, gameplay design, requirements, direction, and final creative decisions were provided by a human who is not a programmer. The code was built with AI under human direction, specification, testing requirements, and final approval.
+
+## Repository
+
+[GitHub — Wrathtide/ProjectZomboid-Extinction](https://github.com/Wrathtide/ProjectZomboid-Extinction)
+
+The repository contains no credentials, Steam session data, save files, or personal data.
