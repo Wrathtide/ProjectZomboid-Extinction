@@ -1,5 +1,11 @@
 # Extinction
 
+> **Roadmap — Update 1.1: Natural Starvation**
+>
+> Zombies will never attack one another, but may survive temporarily by feeding on corpses that already exist. Metabolism, imperfect digestion, and decomposition will steadily drain the world's finite energy until the population dies out naturally.
+>
+> **[Read the researched Update 1.1 project →](docs/UPDATE_1.1_NATURAL_STARVATION.md)**
+
 **Extinction** is a mod for **Project Zomboid Build 42.20+** that simulates the gradual and permanent extinction of the ordinary zombie population. Every ordinary zombie receives an individual death time, and the world progressively changes from an active outbreak into a mostly empty landscape of corpses and skeletons.
 
 The mod is intended for a **new world** and is compatible with **Project A-Life [ALIFE NPCS]**.
