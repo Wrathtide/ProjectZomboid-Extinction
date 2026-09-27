@@ -19,5 +19,7 @@ description=
 description=Author note: I am not a programmer. The original idea, project direction, gameplay design, requirements, and final creative decisions are human work. The code was built with AI under human direction, specification, testing requirements, and final approval.
 description=
 description=Source code and documentation: https://github.com/Wrathtide/ProjectZomboid-Extinction
+description=
+description=License: MIT. The license covers only the original Extinction source code and accompanying project documentation; it does not grant rights to Project Zomboid, Steam, Project A-Life, the referenced novels, third-party mods, trademarks, or other third-party intellectual property.
 tags=Build 42
 visibility=private

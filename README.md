@@ -205,3 +205,9 @@ The project's original idea, gameplay design, requirements, direction, and final
 [GitHub — Wrathtide/ProjectZomboid-Extinction](https://github.com/Wrathtide/ProjectZomboid-Extinction)
 
 The repository contains no credentials, Steam session data, save files, or personal data.
+
+## License
+
+The Extinction source code and its accompanying project documentation are released under the [MIT License](LICENSE).
+
+The MIT License applies only to original material contained in this repository. It does not grant rights to Project Zomboid, Steam, Project A-Life, the referenced novels, their titles or characters, third-party mods, trademarks, or any other third-party intellectual property. Extinction is an unofficial, independent, non-commercial fan project and is not endorsed by The Indie Stone, Valve, the referenced authors, or their publishers.
