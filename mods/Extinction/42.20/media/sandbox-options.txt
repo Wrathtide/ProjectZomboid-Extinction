@@ -1,0 +1,13 @@
+VERSION = 1,
+
+option Extinction.ExtinctionDays = {
+    type = integer, min = 0, max = 3650, default = 21,
+    page = Extinction, translation = Extinction.ExtinctionDays,
+    _tooltip = Extinction.ExtinctionDays_tooltip,
+}
+
+option Extinction.SkeletonizationDays = {
+    type = integer, min = 0, max = 3650, default = 180,
+    page = Extinction, translation = Extinction.SkeletonizationDays,
+    _tooltip = Extinction.SkeletonizationDays_tooltip,
+}

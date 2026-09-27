@@ -1,0 +1,13 @@
+version=1
+title=Extinction
+description=Extinction makes the ordinary zombie population die out gradually and permanently.
+description=
+description=Each zombie receives one immutable random death time between world start and the configurable extinction deadline (21 days by default). Zombies discovered after their assigned death time become corpses carrying that historical date, so late-explored areas do not contain implausibly fresh bodies.
+description=
+description=Deaths are silent and do not count as player kills. Corpse removal and zombie respawning are disabled. Ordinary zombie corpses become lightweight native skeletons after a configurable delay (180 days by default); 0 disables skeletonization. Skeletons remain permanently.
+description=
+description=Compatible with Project A-Life: its marked NPC shells are never killed or skeletonized. Unmarked real zombies from vanilla or other mods remain subject to extinction.
+description=
+description=For new Build 42.20+ worlds. Full Polish documentation is included in README.md.
+tags=Build 42
+visibility=private
