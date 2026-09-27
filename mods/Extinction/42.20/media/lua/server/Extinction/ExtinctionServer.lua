@@ -2,6 +2,7 @@ Extinction = Extinction or {}
 
 local QE = Extinction
 local HOURS_PER_DAY = 24
+local DAYS_PER_MONTH = 30
 local DEFAULT_EXTINCTION_DAYS = 21
 local DEFAULT_SKELETONIZATION_DAYS = 180
 local PENDING_DELAY_TICKS = 2
@@ -19,6 +20,27 @@ local function worldAgeHours()
     return tonumber(gameTime:getWorldAgeHours()) or 0
 end
 
+local function apocalypseOffsetHours()
+    local timeSinceApo = SandboxVars and tonumber(SandboxVars.TimeSinceApo) or nil
+    if type(getSandboxOptions) == "function" then
+        local options = getSandboxOptions()
+        if options ~= nil and options.getTimeSinceApo ~= nil then
+            local ok, value = pcall(function() return options:getTimeSinceApo() end)
+            if ok and tonumber(value) ~= nil then timeSinceApo = tonumber(value) end
+        end
+    end
+    local elapsedMonths = math.max(0, (timeSinceApo or 1) - 1)
+    return elapsedMonths * DAYS_PER_MONTH * HOURS_PER_DAY
+end
+
+local function apocalypseAgeHours()
+    return worldAgeHours() + apocalypseOffsetHours()
+end
+
+local function apocalypseAgeToWorldAge(deathAgeHours)
+    return deathAgeHours - apocalypseOffsetHours()
+end
+
 local function optionNumber(name, fallback)
     local group = SandboxVars and SandboxVars.Extinction
     local value = group and tonumber(group[name]) or nil
@@ -34,7 +56,7 @@ local function skeletonizationHours()
     return optionNumber("SkeletonizationDays", DEFAULT_SKELETONIZATION_DAYS) * HOURS_PER_DAY
 end
 
-local function randomDeathHour()
+local function randomDeathAgeHours()
     local finalHour = extinctionHours()
     if finalHour <= 0 then return 0 end
     return (ZombRand(0, 1000001) / 1000000) * finalHour
@@ -92,16 +114,16 @@ local function trackBody(body)
     QE.trackedBodies[body] = true
 end
 
-local function prepareAmbientBody(body, deathHour)
+local function prepareAmbientBody(body, deathAgeHours)
     if body == nil then return nil end
     local data = safeModData(body)
     if data == nil then return body end
 
-    data.QEManagedCorpse = true
-    data.QEAmbientCorpse = true
-    data.QEDeathHour = deathHour
-    data.QESkeletonized = nil
-    pcall(function() body:setDeathTime(deathHour) end)
+    data.ExtinctionManagedCorpse = true
+    data.ExtinctionAmbientCorpse = true
+    data.ExtinctionDeathAgeHours = deathAgeHours
+    data.ExtinctionSkeletonized = nil
+    pcall(function() body:setDeathTime(apocalypseAgeToWorldAge(deathAgeHours)) end)
     pcall(function() body:setFakeDead(false) end)
     pcall(function() body:setReanimateTime(-1) end)
     pcall(function() body:setKilledBy(nil) end)
@@ -110,7 +132,7 @@ local function prepareAmbientBody(body, deathHour)
     return body
 end
 
-local function convertZombieToBody(zombie, deathHour)
+local function convertZombieToBody(zombie, deathAgeHours)
     if zombie == nil or belongsToProjectALife(zombie) then return nil end
     local square = zombie:getCurrentSquare()
     if square == nil and zombie.getSquare ~= nil then square = zombie:getSquare() end
@@ -124,7 +146,7 @@ local function convertZombieToBody(zombie, deathHour)
 
     local ok, body = pcall(function() return square:createCorpse(zombie, false) end)
     if not ok or body == nil then return nil end
-    prepareAmbientBody(body, deathHour)
+    prepareAmbientBody(body, deathAgeHours)
     sendNewCorpse(body)
     return body
 end
@@ -135,16 +157,16 @@ local function processZombie(zombie)
     local data = safeModData(zombie)
     if data == nil then return end
 
-    local deathHour = tonumber(data.QEDeathHour)
-    if deathHour == nil then
-        deathHour = randomDeathHour()
-        data.QEDeathHour = deathHour
-        data.QEVersion = 1
+    local deathAgeHours = tonumber(data.ExtinctionDeathAgeHours)
+    if deathAgeHours == nil then
+        deathAgeHours = randomDeathAgeHours()
+        data.ExtinctionDeathAgeHours = deathAgeHours
+        data.ExtinctionVersion = 2
         transmitModData(zombie)
     end
 
-    if worldAgeHours() >= deathHour then
-        convertZombieToBody(zombie, deathHour)
+    if apocalypseAgeHours() >= deathAgeHours then
+        convertZombieToBody(zombie, deathAgeHours)
     end
 end
 
@@ -175,13 +197,16 @@ local function scanAllActiveZombies()
     end
 end
 
-local function bodyDeathHour(body)
+local function bodyDeathAgeHours(body)
     local data = safeModData(body)
-    local marked = data and tonumber(data.QEDeathHour) or nil
+    local marked = data and tonumber(data.ExtinctionDeathAgeHours) or nil
     if marked ~= nil then return marked end
     local ok, value = pcall(function() return body:getDeathTime() end)
-    if ok and tonumber(value) ~= nil and tonumber(value) >= 0 then return tonumber(value) end
-    return worldAgeHours()
+    local deathWorldAge = ok and tonumber(value) or nil
+    if deathWorldAge ~= nil and deathWorldAge ~= -1 then
+        return deathWorldAge + apocalypseOffsetHours()
+    end
+    return apocalypseAgeHours()
 end
 
 local function createSkeletonFromBody(body)
@@ -189,7 +214,7 @@ local function createSkeletonFromBody(body)
     local square = body:getSquare()
     if square == nil then return nil end
 
-    local deathHour = bodyDeathHour(body)
+    local deathAgeHours = bodyDeathAgeHours(body)
     local x, y, z = body:getX(), body:getY(), body:getZ()
     local ok, skeleton = pcall(function() return square:createCorpse(true) end)
     if not ok or skeleton == nil then return nil end
@@ -197,17 +222,17 @@ local function createSkeletonFromBody(body)
     pcall(function() skeleton:setX(x) end)
     pcall(function() skeleton:setY(y) end)
     pcall(function() skeleton:setZ(z) end)
-    pcall(function() skeleton:setDeathTime(deathHour) end)
+    pcall(function() skeleton:setDeathTime(apocalypseAgeToWorldAge(deathAgeHours)) end)
     pcall(function() skeleton:setFakeDead(false) end)
     pcall(function() skeleton:setReanimateTime(-1) end)
     pcall(function() skeleton:setKilledBy(nil) end)
 
     local data = safeModData(skeleton)
     if data ~= nil then
-        data.QEManagedCorpse = true
-        data.QEAmbientCorpse = true
-        data.QEDeathHour = deathHour
-        data.QESkeletonized = true
+        data.ExtinctionManagedCorpse = true
+        data.ExtinctionAmbientCorpse = true
+        data.ExtinctionDeathAgeHours = deathAgeHours
+        data.ExtinctionSkeletonized = true
     end
 
     QE.trackedBodies[body] = nil
@@ -220,7 +245,7 @@ end
 local function processTrackedBodies()
     local delay = skeletonizationHours()
     if delay <= 0 then return end
-    local now = worldAgeHours()
+    local now = apocalypseAgeHours()
 
     for body, _ in pairs(QE.trackedBodies) do
         local remove = false
@@ -232,7 +257,7 @@ local function processTrackedBodies()
         else
             local skeleton = false
             pcall(function() skeleton = body:isSkeleton() end)
-            if not skeleton and now >= bodyDeathHour(body) + delay then
+            if not skeleton and now >= bodyDeathAgeHours(body) + delay then
                 createSkeletonFromBody(body)
             end
         end
@@ -262,24 +287,6 @@ local function scanChunkForBodies(chunk)
     end
 end
 
-local function enforceWorldRules()
-    if SandboxVars ~= nil then
-        SandboxVars.HoursForCorpseRemoval = 0.0
-        SandboxVars.RespawnHours = 0.0
-        SandboxVars.DecayingCorpseHealthImpact = 4
-    end
-
-    if type(getSandboxOptions) == "function" then
-        local options = getSandboxOptions()
-        if options ~= nil then
-            pcall(function() options:set("HoursForCorpseRemoval", 0.0) end)
-            pcall(function() options:set("RespawnHours", 0.0) end)
-            pcall(function() options:set("DecayingCorpseHealthImpact", 4) end)
-            pcall(function() options:toLua() end)
-        end
-    end
-end
-
 local function onTick()
     QE.tickNumber = QE.tickNumber + 1
     processPendingZombies()
@@ -290,7 +297,6 @@ local function onTick()
 end
 
 local function onGameStart()
-    enforceWorldRules()
     scanAllActiveZombies()
 end
 
@@ -302,7 +308,6 @@ Events.LoadGridsquare.Add(scanSquareForBodies)
 Events.LoadChunk.Add(scanChunkForBodies)
 Events.OnObjectAdded.Add(trackBody)
 Events.OnDeadBodySpawn.Add(trackBody)
-Events.OnInitWorld.Add(enforceWorldRules)
 Events.OnGameStart.Add(onGameStart)
 Events.OnServerStarted.Add(onGameStart)
 

@@ -1,149 +1,173 @@
 # Extinction
 
-**Extinction** to modyfikacja dla **Project Zomboid Build 42.20+**, która symuluje stopniowe, całkowite wymarcie zombie. Epidemia nie trwa wiecznie: każde zwykłe zombie otrzymuje własny, wcześniej wyznaczony termin śmierci, a świat z czasem zmienia się z miejsca opanowanego przez żywych zarażonych w niemal pusty krajobraz pełen zwłok i szkieletów.
+**Extinction** is a mod for **Project Zomboid Build 42.20+** that simulates the gradual and permanent extinction of the ordinary zombie population. Every ordinary zombie receives an individual death time, and the world progressively changes from an active outbreak into a mostly empty landscape of corpses and skeletons.
 
-Mod został zaprojektowany do rozpoczęcia **nowego świata** i jest zgodny z **Project A-Life [ALIFE NPCS]**.
+The mod is intended for a **new world** and is compatible with **Project A-Life [ALIFE NPCS]**.
 
-## Najważniejsze cechy
+## Main features
 
-- Stopniowe wymieranie całej zwykłej populacji zombie.
-- Konfigurowalny czas do całkowitego wymarcia, domyślnie **21 dni**.
-- Jedna trwała, losowa data śmierci dla każdego zombie.
-- Historyczne daty śmierci dla zombie odkrywanych po wygaśnięciu epidemii.
-- Cicha zamiana zombie w zwłoki, bez walki, odgłosów i punktów zabójstwa.
-- Trwałe zwłoki — gra nie usuwa ich automatycznie.
-- Konfigurowalna szkieletyzacja, domyślnie po **180 dniach od śmierci**.
-- Natywne, lekkie szkielety Project Zomboid zamiast szczegółowych starych ciał.
-- Ochrona wszystkich postaci Project A-Life.
-- Obsługa zwykłych zombie tworzonych przez inne mody.
-- Polskie i angielskie opisy ustawień.
+- Gradual extinction of all ordinary zombies.
+- Configurable extinction deadline, defaulting to **21 days after the apocalypse**.
+- One immutable random death time per zombie.
+- Correct handling of worlds that begin months after the apocalypse.
+- Historically dated corpses in areas first explored long after the outbreak.
+- Silent conversion into corpses without combat, kill credit, or experience.
+- Configurable skeletonization, defaulting to **180 days after each individual death**.
+- Native lightweight Project Zomboid skeletons replace old detailed bodies.
+- Project A-Life characters are explicitly protected.
+- Ordinary zombies created by vanilla or other mods remain subject to extinction.
+- Full compatibility with standard Project Zomboid sandbox population and corpse settings.
+- English and Polish in-game sandbox-option text.
 
-## Jak działa wymieranie zombie
+## Extinction schedule
 
-Po utworzeniu świata każde zwykłe zombie dostaje jedną losową godzinę śmierci. Termin jest wybierany równomiernie pomiędzy początkiem świata a końcem okresu ustawionego przez gracza.
+Every ordinary zombie receives one random death age measured from the beginning of the apocalypse. The value is uniformly distributed between apocalypse day 0 and the configured extinction deadline.
 
-Przykład dla ustawienia **21 dni**:
+With the default value of **21 days**:
 
-- część zombie umrze w pierwszych dniach,
-- część przetrwa około tygodnia lub dwóch,
-- ostatnie zombie umrą najpóźniej do końca 21. dnia,
-- po tym terminie nie pozostaną żadne żywe zwykłe zombie.
+- some zombies die during the first days,
+- some survive for one or two weeks,
+- the final ordinary zombies die no later than the end of day 21,
+- no ordinary zombie can remain alive after the deadline.
 
-Wylosowany termin jest zapisywany w danych zombie i nie zmienia się zależnie od położenia ani widoczności gracza. Jeżeli termin nadejdzie, gdy zombie znajduje się akurat na ekranie, gracz może zobaczyć jego natychmiastową zmianę w ciało. Widoczność nigdy nie wywołuje śmierci i nie powoduje ponownego losowania terminu.
+The assigned time is stored in the zombie's mod data and never changes because of the player's position or visibility. If the deadline happens to occur while the zombie is visible, the player may see the instantaneous conversion into a corpse. Visibility never causes, delays, or rerolls the death.
 
-## Nowo odkrywane rejony
+## Starting months after the apocalypse
 
-Project Zomboid tworzy część populacji dopiero podczas wczytywania kolejnych obszarów mapy. Extinction obsługuje to bez tworzenia „świeżych” zwłok wiele miesięcy po epidemii:
+Extinction uses the standard `TimeSinceApo` sandbox option. Build 42 represents elapsed apocalypse time in months, with each month contributing 30 days. Internally, the mod uses:
 
-1. Nowo utworzone zombie otrzymuje termin z pierwotnego okresu epidemii.
-2. Jeżeli termin jeszcze nie nadszedł, zombie pozostaje żywe do swojej daty śmierci.
-3. Jeżeli termin już minął, zombie natychmiast staje się zwłokami.
-4. Ciało otrzymuje wylosowaną historyczną datę śmierci, a nie datę odkrycia przez gracza.
-5. Jeżeli od tej historycznej daty minął również czas szkieletyzacji, ciało zostanie zastąpione szkieletem.
+```text
+apocalypse age = current world age + (TimeSinceApo - 1) × 30 days
+```
 
-Dzięki temu obszar odkryty późno wygląda tak, jakby jego mieszkańcy zginęli podczas tej samej początkowej katastrofy.
+This means the extinction deadline is always relative to the apocalypse, not to the moment the player enters the world.
 
-## Cicha śmierć
+Example:
 
-Mod nie zabija zombie przy użyciu ataku ani standardowego systemu walki. Korzysta bezpośrednio z natywnej metody tworzenia zwłok silnika gry. W rezultacie:
+- the player selects **Six Months Later**,
+- the extinction deadline is set to **30 days**,
+- the world begins approximately 180 days after the apocalypse,
+- every ordinary zombie is already past its assigned deadline,
+- all ordinary zombies loaded at world start or generated later are immediately converted into historically dated remains.
 
-- nie jest odtwarzany dźwięk walki,
-- nie występuje atak ani obrażenia zadane przez gracza,
-- gracz nie dostaje punktów ani zaliczonego zabójstwa,
-- nie jest przypisywany sprawca śmierci,
-- nie jest wymagana animacja przewrócenia się,
-- ciało pojawia się w dokładnym miejscu zombie.
+The corpse's engine-level death time is shifted into the past so decomposition and the custom skeletonization delay reflect the historical death date rather than the discovery date.
 
-## Szkieletyzacja
+## Newly explored areas
 
-Każde ciało zwykłego zombie jest śledzone do chwili osiągnięcia ustawionego wieku. Domyślna wartość to **180 dni od indywidualnej daty śmierci**.
+Project Zomboid creates part of its population only when new areas are loaded. Extinction handles this without producing implausibly fresh bodies late in the game:
 
-Po osiągnięciu tego wieku:
+1. The vanilla game creates a zombie according to its normal population rules.
+2. Extinction assigns that zombie a death age from the original outbreak period.
+3. If the assigned time is still in the future, the zombie remains alive until that time.
+4. If the assigned time has already passed, the zombie immediately becomes a corpse.
+5. The corpse receives the historical death date, not the time at which the player discovered the area.
+6. If the skeletonization delay has also elapsed, the corpse can become a skeleton during the next corpse-processing pass.
 
-- szczegółowe ciało zostaje zastąpione natywnym szkieletem Project Zomboid,
-- usuwane są ubrania, ekwipunek i indywidualny wygląd ciała,
-- zachowane zostają położenie oraz data śmierci,
-- szkielet pozostaje w świecie na stałe,
-- gotowy szkielet nie jest dalej aktywnie przetwarzany przez mod.
+## Silent death
 
-Jest to świadomy kompromis pomiędzy trwałością świata a wydajnością. Setki szczegółowych ciał mogą być kosztowne dla gry, natomiast uproszczone szkielety pozostawiają widoczny ślad katastrofy przy znacznie mniejszym koszcie.
+Extinction does not kill zombies through an attack or the normal combat-damage path. It calls the engine's native corpse-creation method directly. As a result:
 
-Ustawienie szkieletyzacji na **0** wyłącza automatyczną zamianę. Pełne ciała pozostaną wtedy bezterminowo.
+- no combat sound is produced,
+- no player attack or damage is involved,
+- the player receives no kill credit or experience,
+- no killer is assigned,
+- no dramatic falling animation is required,
+- the corpse occupies the zombie's location.
 
-## Trwałość zwłok, odradzanie i choroby
+## Skeletonization
 
-Extinction wymusza następujące ustawienia świata:
+Ordinary zombie corpses are tracked until they reach the configured age. The default delay is **180 days after the individual death date**.
 
-- `HoursForCorpseRemoval = 0` — automatyczne usuwanie zwłok jest wyłączone,
-- `RespawnHours = 0` — odradzanie zombie jest wyłączone,
-- `DecayingCorpseHealthImpact = 4` — wpływ rozkładających się ciał jest ustawiony na **Wysoki**.
+When the delay has elapsed:
 
-Wyłączenie odradzania jest konieczne, ponieważ inaczej gra stale tworzyłaby po wymarciu kolejne zombie, a mod zamieniałby je w nieskończoną liczbę nowych ciał. Naturalne tworzenie początkowej populacji podczas odkrywania mapy nadal działa.
+- the detailed corpse is replaced by a native Project Zomboid skeleton,
+- clothing, inventory, and identifying visual details are discarded,
+- the position and historical death age are retained,
+- the resulting skeleton is no longer actively processed by the mod.
 
-Duże skupiska zwłok mogą być niebezpieczne dla zdrowia postaci. Ochrona dróg oddechowych dostępna w Build 42 może zmniejszać ryzyko zależnie od wyposażenia i stanu filtra.
+This is a deliberate performance compromise. Hundreds of detailed bodies can be expensive, while native skeletons preserve the visual history of the disaster at a lower runtime cost.
 
-## Zgodność z Project A-Life
+Setting the skeletonization delay to **0** disables automatic skeletonization.
 
-Project A-Life wykorzystuje obiekty klasy zombie jako techniczne „powłoki” swoich ludzkich NPC. Extinction rozpoznaje je przez oficjalne znaczniki:
+## Full standard-sandbox compatibility
+
+Extinction does **not** overwrite or replace any standard Project Zomboid sandbox setting. It does not write to population, peak population, distribution, respawn, corpse removal, corpse sickness, start date, or months-since-apocalypse options.
+
+In particular:
+
+- Zombie count and distribution are controlled exclusively by vanilla population settings.
+- Extinction never spawns additional ordinary zombies to reach its own target.
+- Population peak and population evolution remain controlled by the game.
+- If vanilla respawn is enabled, the game may continue to create replacement zombies; after the extinction deadline, each such zombie is immediately converted into historically dated remains.
+- If corpse removal is enabled, the game may remove bodies and skeletons according to the selected standard setting.
+- If corpse removal is disabled by the player, remains persist.
+- Corpse sickness uses exactly the standard value selected by the player.
+- Start month, start day, start year, and `TimeSinceApo` remain untouched.
+
+The mod adds only two independent settings of its own: the extinction deadline and the skeletonization delay. Neither setting substitutes for a vanilla population option.
+
+## Project A-Life compatibility
+
+Project A-Life uses zombie-class objects as technical shells for human NPCs. Extinction detects those shells using the official markers:
 
 - `ProjectALifeOwned`,
 - `ProjectALifeActor`,
 - `ALifeActor`,
 - `ALifeUID`.
 
-Obiekt z którymkolwiek z tych oznaczeń jest całkowicie pomijany:
+Any object carrying one of these markers is excluded completely:
 
-- nie dostaje terminu wymarcia,
-- nie jest zamieniany w ciało,
-- jego ciało nie jest automatycznie szkieletyzowane przez Extinction,
-- może dalej żyć i działać zgodnie z mechaniką Project A-Life.
+- it receives no extinction time,
+- it is never converted into an ambient corpse,
+- its corpse is not skeletonized by Extinction,
+- the NPC remains under Project A-Life's control.
 
-Zwykłe, nieoznaczone zombie — także utworzone przez Project A-Life lub inny mod — podlegają normalnemu procesowi wymierania. Project A-Life nie jest wymagany; Extinction działa również samodzielnie.
+Unmarked ordinary zombies—whether created by vanilla, Project A-Life, or another mod—follow the normal extinction schedule. Project A-Life is optional; Extinction also works by itself.
 
-## Ustawienia świata
+## Custom sandbox options
 
-Po włączeniu moda w opcjach piaskownicy pojawi się strona **Extinction**.
+Enabling the mod adds an **Extinction** page to the sandbox settings.
 
-### Dni do całkowitego wymarcia zombie
+### Days until complete zombie extinction
 
-- Domyślnie: `21`
+- Default: `21`
 - Minimum: `0`
-- Maksimum: `3650`
-- `0` oznacza natychmiastowe wymarcie zwykłych zombie.
+- Maximum: `3650`
+- `0` means immediate extinction.
 
-Cały rozkład śmierci automatycznie skaluje się do wpisanej wartości.
+The entire probability distribution scales automatically to the selected value.
 
-### Dni od śmierci do szkieletyzacji
+### Days from death to skeletonization
 
-- Domyślnie: `180`
+- Default: `180`
 - Minimum: `0`
-- Maksimum: `3650`
-- `0` wyłącza automatyczną szkieletyzację.
+- Maximum: `3650`
+- `0` disables automatic skeletonization.
 
-Wartość jest liczona osobno od rzeczywistej lub historycznej daty śmierci każdego ciała.
+This delay is calculated separately from each corpse's real or historical death date.
 
-## Instalacja lokalna
+## Installation
 
-Katalog `Extinction` należy umieścić w:
+Place the `Extinction` folder in:
 
 ```text
-C:\Users\<nazwa użytkownika>\Zomboid\mods\Extinction
+C:\Users\<username>\Zomboid\mods\Extinction
 ```
 
-Następnie należy włączyć mod **Extinction** podczas tworzenia nowego świata. Jeśli używany jest Project A-Life, oba mody powinny być aktywne w tym samym zapisie.
+Enable **Extinction** when creating a new world. When using Project A-Life, enable both mods for the same save.
 
-## Wersja i zakres testów
+## Version and validation
 
-- Docelowa wersja gry: **Project Zomboid Build 42.20+**.
-- Wersja moda: **1.0.0**.
-- Składnia została sprawdzona parserem Kahlua dołączonym do lokalnej instalacji gry.
-- Użyte zdarzenia i metody zostały zweryfikowane bezpośrednio w lokalnym `projectzomboid.jar`.
-- Pliki ustawień i tłumaczeń zostały sprawdzone statycznie.
-- Zgodność znaczników została sprawdzona z Project A-Life 1.3.0 dla Build 42.20.
+- Target game version: **Project Zomboid Build 42.20+**.
+- Mod version: **1.0.1**.
+- Lua syntax is checked with the Kahlua parser shipped with the local game installation.
+- Events and Java methods are verified directly against the local `projectzomboid.jar`.
+- Sandbox-option and translation files are validated statically.
+- Project A-Life marker compatibility was checked against Project A-Life 1.3.0 for Build 42.20.
 
-Pełny test działającego świata w grze jest osobnym etapem. Mod został przygotowany dla nowego zapisu, ponieważ istniejący świat mógł już wygenerować populację i zwłoki według innych zasad.
+Runtime testing in a real world remains a separate validation stage. A new save is recommended because an existing world may already contain population and corpses generated under different rules.
 
-## Struktura projektu
+## Project structure
 
 ```text
 mods/Extinction/42.20/
@@ -157,6 +181,6 @@ mods/Extinction/42.20/
             └── PL/Sandbox.json
 ```
 
-## Prywatność i publikacja
+## Privacy
 
-Projekt jest przeznaczony do prywatnego repozytorium GitHub i prywatnej pozycji Steam Workshop. Kod nie zawiera danych logowania, tokenów, zapisów świata ani danych osobowych.
+The source repository and the initial Steam Workshop item are private. The project contains no credentials, Steam session data, save files, or personal data.

@@ -1,7 +1,7 @@
 {
     "Sandbox_Extinction": "Extinction",
     "Sandbox_Extinction.ExtinctionDays": "Days until complete zombie extinction",
-    "Sandbox_Extinction.ExtinctionDays_tooltip": "Every ordinary zombie receives one permanent random death date between world start and the end of this period. A value of 0 causes immediate extinction. Project A-Life characters are not affected.",
+    "Sandbox_Extinction.ExtinctionDays_tooltip": "Every ordinary zombie receives one permanent random death date between the beginning of the apocalypse and the end of this period. The standard Months Since the Apocalypse setting is respected. A value of 0 causes immediate extinction. Project A-Life characters are not affected.",
     "Sandbox_Extinction.SkeletonizationDays": "Days from death to skeletonization",
-    "Sandbox_Extinction.SkeletonizationDays_tooltip": "After this many days, an ordinary zombie corpse is replaced with a lightweight, unidentifiable skeleton. The skeleton remains forever. A value of 0 disables automatic skeletonization."
+    "Sandbox_Extinction.SkeletonizationDays_tooltip": "After this many days, an ordinary zombie corpse is replaced with a lightweight, unidentifiable skeleton. Standard corpse-removal settings still apply. A value of 0 disables automatic skeletonization."
 }

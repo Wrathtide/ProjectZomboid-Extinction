@@ -1,8 +1,8 @@
 name=Extinction
 id=Extinction
 author=Codex for kwasn
-modversion=1.0.0
+modversion=1.0.1
 versionMin=42.20.0
 poster=poster.png
 icon=icon.png
-description=Zombie wymieraja w ustawionym okresie, pozostawiajac trwale zwloki i szkielety. Zgodne z Project A-Life.
+description=Ordinary zombies die out on a configurable apocalypse timeline, leaving historically dated corpses and skeletons. Project A-Life compatible.
