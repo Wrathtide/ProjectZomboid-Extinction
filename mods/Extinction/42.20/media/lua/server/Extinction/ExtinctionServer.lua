@@ -187,7 +187,9 @@ local function processPendingZombies()
     for zombie, readyTick in pairs(QE.pendingZombies) do
         if readyTick <= QE.tickNumber then
             QE.pendingZombies[zombie] = nil
-            processZombie(zombie)
+            if QE.NaturalStarvation == nil or not QE.NaturalStarvation.isEnabled() then
+                processZombie(zombie)
+            end
             processed = processed + 1
             if processed >= MAX_PENDING_PER_TICK then return end
         end
@@ -199,9 +201,12 @@ local function scanAllActiveZombies()
     if cell == nil then return end
     local zombies = cell:getZombieList()
     if zombies == nil then return end
+    local natural = QE.NaturalStarvation ~= nil and QE.NaturalStarvation.isEnabled()
+    if natural then QE.NaturalStarvation.beginBatch() end
     for index = zombies:size() - 1, 0, -1 do
         processZombie(zombies:get(index))
     end
+    if natural then QE.NaturalStarvation.endBatch() end
 end
 
 local function bodyDeathAgeHours(body)
@@ -214,6 +219,79 @@ local function bodyDeathAgeHours(body)
         return deathWorldAge + apocalypseOffsetHours()
     end
     return apocalypseAgeHours()
+end
+
+local function moveItemToContainerOrGround(item, source, target, square)
+    if item == nil or source == nil or target == nil then return end
+    source:Remove(item)
+    local ok, moved = pcall(function() return target:addItem(item) end)
+    if ok and moved ~= nil then return end
+    if square ~= nil and square.AddWorldInventoryItem ~= nil then
+        pcall(function() square:AddWorldInventoryItem(item, 0.5, 0.5, 0) end)
+    end
+end
+
+local function isSoftContainer(item)
+    if item == nil or type(instanceof) ~= "function"
+            or not instanceof(item, "InventoryContainer") then
+        return false
+    end
+    local fullType = ""
+    pcall(function() fullType = string.lower(tostring(item:getFullType() or "")) end)
+    local softNames = {
+        "backpack", "duffel", "schoolbag", "satchel", "purse",
+        "handbag", "tote", "fanny", "rucksack",
+    }
+    for _, name in ipairs(softNames) do
+        if string.find(fullType, name, 1, true) ~= nil then return true end
+    end
+    return false
+end
+
+local function preserveNestedContents(item, target, square)
+    if item == nil or type(instanceof) ~= "function"
+            or not instanceof(item, "InventoryContainer") then
+        return
+    end
+    local ok, inventory = pcall(function() return item:getInventory() end)
+    if not ok or inventory == nil then return end
+    local items = inventory:getItems()
+    if items == nil then return end
+    for index = items:size() - 1, 0, -1 do
+        local nested = items:get(index)
+        preserveNestedContents(nested, target, square)
+        moveItemToContainerOrGround(nested, inventory, target, square)
+    end
+    pcall(function() inventory:requestSync() end)
+end
+
+local function isConsumableSoftItem(item)
+    if item == nil then return false end
+    if isSoftContainer(item) then return true end
+    local category = ""
+    pcall(function() category = tostring(item:getCategory() or "") end)
+    return category == "Clothing"
+end
+
+local function transferPreservedLoot(body, skeleton, square)
+    if body == nil or skeleton == nil then return end
+    local okSource, source = pcall(function() return body:getContainer() end)
+    local okTarget, target = pcall(function() return skeleton:getContainer() end)
+    if not okSource or not okTarget or source == nil or target == nil then return end
+    local items = source:getItems()
+    if items == nil then return end
+
+    for index = items:size() - 1, 0, -1 do
+        local item = items:get(index)
+        if isConsumableSoftItem(item) then
+            preserveNestedContents(item, target, square)
+            source:Remove(item)
+        else
+            moveItemToContainerOrGround(item, source, target, square)
+        end
+    end
+    pcall(function() source:requestSync() end)
+    pcall(function() target:requestSync() end)
 end
 
 local function createSkeletonFromBody(body)
@@ -241,6 +319,8 @@ local function createSkeletonFromBody(body)
         data.ExtinctionDeathAgeHours = deathAgeHours
         data.ExtinctionSkeletonized = true
     end
+
+    transferPreservedLoot(body, skeleton, square)
 
     QE.trackedBodies[body] = nil
     if QE.NaturalStarvation ~= nil then QE.NaturalStarvation.untrackBody(body) end
@@ -316,6 +396,7 @@ QE.NaturalStarvation.configure({
     belongsToProjectALife = belongsToProjectALife,
     transmitModData = transmitModData,
     convertZombieToBody = convertZombieToBody,
+    createSkeletonFromBody = createSkeletonFromBody,
 })
 
 Events.OnZombieCreate.Add(queueZombie)
@@ -327,6 +408,7 @@ Events.LoadGridsquare.Add(scanSquareForBodies)
 Events.LoadChunk.Add(scanChunkForBodies)
 Events.OnObjectAdded.Add(trackBody)
 Events.OnDeadBodySpawn.Add(trackBody)
+Events.OnInitGlobalModData.Add(QE.NaturalStarvation.initGlobalData)
 Events.OnGameStart.Add(onGameStart)
 Events.OnServerStarted.Add(onGameStart)
 

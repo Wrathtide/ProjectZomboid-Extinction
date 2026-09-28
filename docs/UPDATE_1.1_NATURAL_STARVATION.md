@@ -1,208 +1,556 @@
-# Extinction 1.1 Project — Natural Starvation
+# Extinction 1.1 Project — Natural Extinction
 
-> Status: prototype implemented on the `feature/natural-starvation-1.1` branch; runtime validation is still required.
+> Status: design approved; implementation beta is in progress on
+> `feature/natural-starvation-1.1`. Static API and Lua syntax checks pass.
+> Runtime validation in Project Zomboid is still required before release.
 >
-> This document is a design target, not a promise that every item below is already implemented.
+> This document supersedes the earlier multi-parameter Natural Starvation
+> proposal. The released fixed-timeline mode remains unchanged until every
+> mandatory validation gate has passed.
 
 ## Vision
 
-Version 1.1 is planned to add an optional natural-extinction simulation alongside Extinction's stable fixed-timeline mode.
+Natural Extinction is an optional alternative to the fixed extinction deadline.
+It treats the zombie population as a decaying biological system.
 
-Zombies will consume energy every day. They may survive longer by feeding on corpses that already exist, but they will never attack or damage other zombies to obtain food. Corpse decomposition, metabolic losses, and imperfect digestion will continuously remove energy from the closed system. As edible remains disappear, the zombie population will gradually starve.
+Every active zombie stores one composite biological reserve. The reserve falls
+with time, activity, temperature stress, dehydration, and systemic failure. It
+may be replenished by liquid rain and by feeding on corpses that already exist.
 
-The sandbox page now exposes this system as **Enable natural calorie distribution (experimental)**. It is disabled by default. Enabling it locks and ignores the fixed extinction-days field while leaving skeletonization configurable.
+The mode deliberately permits rare, unusually resilient zombies. It does not
+promise that the world becomes mathematically empty on a predetermined day.
+The late game should become mostly silent while preserving uncertainty.
 
-## Implemented beta scope
+Non-negotiable rules:
 
-- Individual persistent energy reserves and metabolic requirements for loaded zombies.
-- A deliberately broad, weighted no-food survival distribution: 15% at 0.5–3 days, 50% at 3–14 days, 28% at 14–30 days, and 7% at 30–55 days.
-- A shared per-corpse calorie pool with 70% assimilation efficiency and a three-eater limit inherited from the native game behaviour.
-- Feeding from existing human and zombie corpses without selecting a living zombie as prey.
-- A loaded-chunk corpse index and low-frequency accounting instead of per-frame world scans.
-- Temperature-dependent exponential calorie decay stored in corpse mod data.
-- Historical ageing from apocalypse day zero for zombies created in regions discovered later.
-- Local historical reconciliation: an overdue zombie may survive only by debiting calories that actually remain in nearby corpses. Failure produces a corpse with a historical death time.
-- Existing fixed-deadline mode remains unchanged and is still the default.
+- zombies never attack, injure, or hunt living zombies for food;
+- zombies may feed only from an existing `IsoDeadBody`;
+- human, zombie, and animal corpses may provide resources;
+- living animals may be hunted only when the separate option is enabled;
+- rotten flesh loses resources but is not toxic to zombies;
+- living NPCs, including Project A-Life characters, are never processed as
+  zombies or prey by Extinction.
 
-The persistent aggregate-sector model described below remains a target for later beta work. The current prototype performs a conservative local reconciliation when objects materialize; it does not claim an exact route-by-route simulation while a region is virtualized.
+## Sandbox settings
 
-```text
-Living zombie
-     │ consumes energy
-     ▼
-Hunger threshold ──► searches for an existing corpse
-     │                         │
-     │ none found              │ corpse found
-     ▼                         ▼
-Starvation death        native eating behaviour
-     │                         │
-     └──── becomes a corpse ◄──┘
-                               │
-                     calories and decomposition
-                               │
-                               ▼
-                  exhausted corpse / skeleton
-```
+| Setting | Type | Default | Behaviour |
+|---|---:|---:|---|
+| Natural Extinction | Checkbox | Off | Enables the biological-reserve simulation. |
+| Days Until Complete Zombie Extinction | Integer | 21 | Used only in fixed mode. Locked and ignored in natural mode. |
+| Days From Death to Skeletonization | Integer | 180 | Remains available in both modes. |
+| Zombies Hunt Living Animals | Checkbox | On | Allows hungry zombies to select living animals as prey in natural mode. |
+| Testing: Zombies Ignore Player | Checkbox | Off | Lets an eligible tester observe zombies without becoming their target. |
+| Testing: Show Zombie Biological State | Checkbox | Off | Draws a compact state label over nearby active zombies. |
 
-## Non-negotiable rules
+Natural Extinction remains disabled by default. The fixed extinction schedule
+continues to be the predictable standard mode.
 
-- Zombies never attack, injure, or target living zombies as food.
-- Feeding is allowed only from an existing `IsoDeadBody`.
-- Eligible food consists of non-skeletal human and zombie corpses.
-- Animal corpses are excluded from the initial design.
-- Living NPCs, including Project A-Life characters, are never affected by Extinction's death system.
-- Zombies created by another mod are eligible only when they are actual `IsoZombie` objects.
-- Vanilla sandbox population, peak, migration, respawn, and apocalypse-age settings remain authoritative.
-- The existing fixed extinction timeline remains the stable default until the natural mode passes all validation gates.
+## One persistent parameter per active zombie
 
-## Verified Project Zomboid support
+An active zombie stores only:
 
-Build 42.20 contains a native `ZombieEatBodyState` and public zombie methods including `setBodyToEat(IsoDeadBody)`, `setEatBodyTarget(IsoMovingObject, boolean)`, and `getEatBodyTarget()`.
+- `ExtinctionBiologicalReserve`
 
-The native implementation already provides movement and pathing towards a corpse, kneeling and eating animation, feeding sounds and blood effects, multiplayer synchronization, interruption when a higher-priority target appears, and a three-eaters-per-body limit.
+The value combines the effects of:
 
-Vanilla corpse selection accepts human corpses but deliberately rejects zombie corpses. Extinction 1.1 will replace only this selection step. After selecting an eligible corpse, it will hand control back to the game's native eating state. It will not replace combat AI, create zombie-on-zombie attacks, or use a living zombie as an eating target.
+- stored energy;
+- hydration;
+- individual metabolic demand;
+- age and pre-infection health;
+- organ resilience;
+- current environmental stress;
+- reserve-dependent systemic failure.
 
-## Active-area simulation
+It is a gameplay abstraction measured in baseline survival-day equivalents,
+not a literal calorie or water counter.
 
-Loaded zombies will be simulated individually on the server. Each tracked zombie will have a current energy reserve, daily metabolic requirement, a small deterministic metabolism variation, last accounting time, and hunger and starvation thresholds.
+Search cooldowns, synchronization thresholds, and current batch state exist
+only in transient weak-reference tables. They are not written into every
+zombie's persistent mod data.
 
-Energy accounting will run at a low fixed frequency, such as every ten in-game minutes, rather than every frame:
+### Initial population curve
 
-```text
-energy spent = daily requirement × elapsed game hours / 24
-```
+When a zombie first enters the simulation, Extinction draws a continuous
+reserve from a precomputed population curve and stores only the result.
 
-The initial reference value will be approximately 2,500 kcal per day. This is a gameplay model based on ordinary adult human energy requirements, not a claim about fictional zombie biology.
+The curve is informed by:
 
-### Corpse selection
+- the United States age structure around 1990;
+- NHANES population health and body-mass data;
+- variation in resting metabolic demand;
+- the short-term importance of hydration;
+- a small long tail of unusually resilient individuals.
 
-A hungry zombie may select a corpse only when:
+The implemented beta curve is continuous inside these population bands:
 
-- it has no living target and is not performing a higher-priority action;
+| Population share | Baseline reserve before environmental support |
+|---:|---:|
+| 10% | 1–3 days |
+| 30% | 3–10 days |
+| 35% | 10–25 days |
+| 20% | 25–60 days |
+| 4.5% | 60–120 days |
+| 0.5% | 120–180 days |
+
+These are balancing bands, not claims about fictional zombie medicine. They
+must be tuned from repeated population simulations and in-game observation.
+
+### Active update
+
+The server processes active zombies in sector batches instead of running a
+biological function every frame.
+
+Each update:
+
+1. subtracts baseline reserve expenditure for elapsed game time;
+2. applies activity and temperature multipliers;
+3. adds liquid-rain support when the zombie is outdoors;
+4. adds assimilated corpse resources while it is eating;
+5. applies a small reserve-dependent systemic-failure risk;
+6. clamps the reserve to its supported range;
+7. converts a failed zombie directly to a corpse through Extinction's silent
+   death pipeline.
+
+The combined system represents starvation, dehydration, high metabolism,
+pre-existing disease, organ damage, infection-related failure, temperature
+exposure, exhaustion, and collapse in critically weakened individuals.
+
+## Rain and hydration
+
+The regional reference is Louisville and north-central Kentucky.
+NOAA 1991–2020 normals report approximately:
+
+- 48.34 inches / 1,228 mm of precipitation per year;
+- 124.5 days per year with at least 0.01 inch;
+- 3.36 mm per calendar day averaged across the year;
+- 9.86 mm on a qualifying precipitation day.
+
+The active simulation uses the game's real current weather. It reads rain
+intensity, snow state, local temperature, and whether the square is outdoors.
+
+The simplification assumes an effective water-access area of 0.20 square
+metres:
+
+- annual-average incident water: about 0.67 litres per day;
+- typical wet day: about 1.97 litres;
+- maximum usable water: 3.0 litres per day.
+
+The model represents drinking from wet skin, clothing, puddles, surfaces, and
+remains. Snow grants no immediate hydration because version 1.1 does not
+simulate melting.
+
+Historical unloaded time uses a conservative regional average support of 0.20
+reserve-day per apocalypse day. Active areas use actual game rain.
+
+### Water retained by corpses
+
+A human corpse may be treated as approximately 0.60 square metres of exposed
+collection area. A typical wet day provides about 5.9 litres of incident water.
+The model retains only a small accessible part:
+
+- approximately 10% of incident water;
+- a maximum of 1.0 litre-equivalent for a human corpse;
+- a size-scaled capacity for animals.
+
+This is an explicit gameplay assumption, not a forensic measurement. Rain
+changes the corpse's single resource value and does not create a second water
+field.
+
+## One persistent parameter per used corpse
+
+A corpse is indexed when it enters an active chunk, but it receives no
+biological field until a zombie inspects or uses it.
+
+The only persistent natural-mode field on a used corpse is:
+
+- `ExtinctionCorpseResource`
+
+It combines accessible tissue, recoverable fluids, decomposition loss, and the
+small rain contribution. The native corpse death time supplies age, so no
+duplicate custom timestamp is stored.
+
+A skeleton always has zero resource.
+
+### Human and zombie corpses
+
+The published estimate of approximately 32,000 kcal of potentially edible
+human skeletal muscle is used as an upper reference. One average fresh human
+corpse begins near 12.8 raw reserve-day equivalents before assimilation.
+
+The value varies with body size and falls with corpse age and temperature.
+Assimilation is intentionally lossy. A zombie dying after biological depletion
+produces only a fraction of a fresh corpse's resource, preventing infinite
+recycling.
+
+### Animal corpses
+
+Animal corpses are eligible. The game exposes animal type, breed, body size,
+animal-corpse state, and animal-skeleton state.
+
+Version 1.1 uses conservative species and size mappings:
+
+- mice and rats provide a negligible resource;
+- poultry provides less than two baseline days;
+- sheep, pigs, and deer provide intermediate resources;
+- cattle provide the largest resource pool;
+- unknown modded animals receive a bounded size-based fallback.
+
+The values remain balance parameters and must be checked against every vanilla
+animal species.
+
+## Corpse feeding
+
+Extinction reuses the game's native zombie corpse-eating behaviour for:
+
+- walking and pathfinding;
+- kneeling and eating animation;
+- sounds and visual effects;
+- interruption by a higher-priority target;
+- the native simultaneous-eater limit.
+
+Extinction extends selection and performs server-authoritative resource
+accounting.
+
+A hungry zombie may select a corpse only if:
+
+- it has no higher-priority target;
 - the object is an existing `IsoDeadBody`;
-- it is a human or zombie corpse, not an animal;
 - it is not a skeleton;
-- it has edible calories remaining;
-- it is still present in the world and reachable;
-- fewer than three zombies are already feeding from it.
+- resource remains;
+- it is on the same level and inside the search radius;
+- the native eating state can accept it.
 
-Corpse lookup will use a per-chunk index maintained from corpse-spawn and chunk-load events. It will not scan every nearby square for every zombie on every frame.
+Shared corpse resources are debited exactly once. Only 70% of consumed resource
+is added to zombie reserves. Digestion, feeding loss, decomposition, and
+metabolic expenditure permanently remove matter from the closed system.
 
-### Feeding and calorie transfer
+## Living animal hunting
 
-The native animation does not contain a nutritional system. Extinction must perform server-authoritative accounting while `getEatBodyTarget()` still points to the corpse.
+The setting `Zombies Hunt Living Animals` is separate and only affects living
+animals.
 
-For each accounting interval:
+The current Build 42 API supports the required path:
 
-1. Determine how much tissue each active eater could consume.
-2. Cap the total by the corpse's remaining calories.
-3. Remove the consumed amount from the corpse exactly once.
-4. Add only the assimilated portion to the eating zombies.
-5. Permanently discard the remainder as metabolic and feeding loss.
-6. Detach all eaters when no edible energy remains.
+- `IsoAnimal` derives from the player-character hierarchy used by zombie
+  targeting;
+- zombies expose target and path-to-character methods;
+- animals expose health, hit consequences, death, and native flee behaviour;
+- the active cell exposes its animal list;
+- a dead animal becomes an `IsoDeadBody`.
 
-The initial prototype will use roughly 70% assimilation efficiency. This is an explicit balancing assumption and will be validated before becoming a release default.
+The beta implementation:
 
-## Corpse energy model
+1. searches the game's active animal list only when a hungry zombie found no
+   usable corpse;
+2. keeps the animal search bounded;
+3. assigns the animal through the zombie's native target and pathing methods;
+4. triggers the animal's native flee response;
+5. relies on the inherited native attack path because `IsoAnimal` is an
+   `IsoPlayer` subclass;
+6. leaves the normal animal corpse for the corpse-resource model.
 
-The research baseline is approximately 32,000 kcal of potentially edible skeletal muscle for an average fresh human body, with a deterministic body-size variation of approximately 0.70–1.30.
+Runtime testing must still confirm attack damage, animation alignment, fleeing,
+multiplayer authority, and corpse creation for every supported animal size.
+The mod does not synthesize unverified damage while these tests are pending.
 
-```text
-initial edible calories = 32,000 × body-size factor
-approximate range       = 22,400–41,600 kcal
-```
+## Consumed remains and loot
 
-At 70% assimilation and a 2,500 kcal daily requirement, an average fresh corpse could extend one zombie's survival by about nine days. Multiple eaters divide the benefit.
+When a human or zombie corpse reaches zero resource, it may be converted to a
+native lightweight skeleton before the ordinary age deadline.
 
-A zombie that dies from starvation still becomes food, but its corpse must not reset to a full healthy-body value. Its remaining calories will depend on its original body size, starvation damage, previous feeding history, and decomposition state. The proposed starvation-corpse range is approximately 40–70% of the corresponding fresh-body value, subject to prototype balancing.
+During conversion:
 
-This keeps the system lossy: corpse energy is reduced by decomposition, feeding loss, and metabolic expenditure. The final survivor cannot consume its own future corpse, so extinction remains the eventual outcome in a closed population with no external supply of fresh bodies.
+- clothing and soft containers are treated as consumed or destroyed;
+- nested contents are removed from a soft container before that container is
+  destroyed;
+- weapons, tools, keys, ammunition, jewellery, and unknown modded items are
+  preserved;
+- preserved items are transferred to the skeleton container;
+- an item that cannot be transferred is dropped on the same square.
 
-## Decomposition and skeletonization
+Unknown item categories are preserved by default.
 
-Edible decay and visual skeletonization are separate processes.
+Animal corpses use a native animal skeleton only where the game supports it.
+Otherwise the zero-resource animal corpse remains available to the game's
+ordinary rot/removal systems rather than being replaced by an incorrect human
+skeleton.
 
-- A body may become nutritionally exhausted long before it turns into a skeleton.
-- A skeleton always contains zero edible calories.
-- Warm conditions accelerate decay.
-- Cold conditions slow decay.
-- Freezing conditions almost suspend decay.
-- Feeding damage may accelerate the loss of remaining tissue.
-- The existing configurable skeletonization period remains independent, with 180 days as its default.
+## Loaded and unloaded simulation
 
-Project Zomboid exposes climate and square-temperature data, but it does not expose a scientifically exact remaining-calorie value. Extinction will use a documented temperature-dependent gameplay model. Exact decay constants must be calibrated in the prototype and must not be presented as forensic facts.
+Project Zomboid virtualizes distant zombies through
+`ZombiePopulationManager`. Pure Lua cannot maintain a full object-level route
+and feeding history for every absent zombie.
 
-## Unloaded-world simulation
-
-Project Zomboid virtualizes distant zombies through `ZombiePopulationManager`. A Lua mod cannot safely maintain a complete, continuously running object-level simulation for every virtual zombie on the entire map.
-
-Version 1.1 will therefore use two layers:
+The implementation therefore uses two layers:
 
 | World state | Simulation |
 |---|---|
-| Loaded near players | Individual zombie and corpse accounting |
-| Unloaded / virtualized | Persistent aggregate sector accounting |
+| Loaded near players | Individual zombie reserve and lazy corpse resource |
+| Unloaded or virtualized | Persistent aggregate sector timing and reserve statistics |
 
-Each aggregate sector record will contain the last simulated apocalypse hour, estimated living population, total living-zombie energy, total edible corpse energy, energy lost to metabolism and decomposition, and a data-model version.
+Each 50×50-tile sector stores:
 
-When a sector loads, Extinction will advance this aggregate model over elapsed game time, reconcile it with the zombies and corpses supplied by the engine, and distribute the result deterministically. Zombies that could not have survived will become corpses outside player sight whenever possible.
+- the last simulated apocalypse hour;
+- the last observed active population;
+- the last observed mean biological reserve;
+- the model version.
 
-This is an energy-conserving approximation, not a claim that every distant zombie followed an individually simulated route while unloaded.
+When a sector becomes active again, every persistent zombie in that sector is
+advanced by the same missing time. Newly materialized zombies are instead
+initialized from the full apocalypse age, so elapsed time is never charged
+twice.
 
-## Sandbox compatibility
+This is a deterministic population approximation. It does not pretend that an
+absent zombie followed an exact route or ate one particular corpse while the
+engine had no corresponding object.
 
-Extinction will not replace or rewrite vanilla population options. The natural model must consume the world produced by the selected population multipliers, peak day, migration, respawn, start date, and `Time Since Apocalypse`.
+## Vanilla sandbox compatibility
 
-A zombie object spawned six months after the apocalypse will not receive six months of fresh energy merely because the engine instantiated it then. Its state must be derived from apocalypse age and the persistent sector balance. With respawn enabled, new objects represent members of the historical population and must not inject fresh energy into the world.
+Extinction does not replace or rewrite:
 
-## NPC and Project A-Life boundary
+- population multiplier and presets;
+- starting and peak population;
+- peak day;
+- migration;
+- respawn;
+- rally groups and distribution;
+- time since apocalypse;
+- start date and world time;
+- standard corpse-removal or corpse-sickness settings.
 
-- Extinction never applies zombie starvation logic to a living NPC.
-- Extinction never kills an A-Life character.
-- A dead human NPC may become food only after it genuinely exists as an `IsoDeadBody`.
-- A mod-created hostile entity participates only if it is an actual `IsoZombie`.
-- Project A-Life compatibility must pass a dedicated integration test before release.
+Examples:
+
+- a six-month-later start initializes new zombies from six months of biological
+  history instead of giving them fresh reserves;
+- fixed mode still kills every eligible zombie already beyond its configured
+  deadline;
+- enabling natural mode locks and ignores the fixed deadline;
+- respawned objects in an old world inherit old-world history and cannot inject
+  a fresh reserve;
+- the number and distribution of zombies always originate from the selected
+  vanilla settings.
+
+## Project A-Life compatibility
+
+- Living NPCs never receive a zombie reserve.
+- Extinction never kills a Project A-Life character.
+- Known ownership markers are checked before biological processing.
+- A dead NPC may become food only after it genuinely exists as an
+  `IsoDeadBody`.
+- A mod-created hostile participates only if it is an actual `IsoZombie` and
+  is not marked as an owned NPC actor or shell.
+- Real zombies created by another mod follow the same extinction rules.
+- Test invisibility uses only the zombie-ignore flag and does not hide the
+  player from A-Life NPCs.
+
+A dedicated Project A-Life runtime test remains mandatory.
+
+## Testing tools
+
+Both tools are simple sandbox checkboxes and default to Off.
+
+### Testing: Zombies Ignore Player
+
+Purpose: allow observation of feeding, starvation, and animal hunting without
+interrupting the tested behaviour.
+
+Implementation:
+
+- uses `setZombiesDontAttack(boolean)`;
+- does not enable god mode;
+- does not make the player invisible;
+- applies to the local player in single-player;
+- is restricted to non-`None` access levels on multiplayer clients;
+- records whether Extinction changed the flag;
+- restores the ordinary state only when Extinction enabled it.
+
+Runtime tests must confirm multiplayer authority and interaction with other
+administration mods.
+
+### Testing: Show Zombie Biological State
+
+The client draws one compact line over nearby active zombies:
+
+```text
+Reserve 0.62 | ~1 days | Critical
+```
+
+Possible states:
+
+- `Stable`
+- `Rain-supported`
+- `Hungry`
+- `Critical`
+- `Failing`
+- `Feeding`
+
+The reserve value is authoritative. Approximate days are a baseline diagnostic,
+not a promised death date.
+
+The overlay:
+
+- is limited to approximately 20 tiles;
+- skips zombies on another floor or outside the screen;
+- reads synchronized zombie mod data;
+- creates no additional persistent biological fields;
+- performs no drawing work while disabled;
+- is restricted to eligible administrators on multiplayer clients.
 
 ## Performance rules
 
-- Server-authoritative calculation only.
-- No full-map zombie iteration.
-- No per-frame calorie accounting.
-- No per-zombie full-square scan.
-- Corpses indexed by loaded chunk.
-- Hungry zombies searched in batches.
-- Shared corpse calories debited atomically.
-- Empty sector records compacted.
+- One persistent reserve value per active zombie.
+- One persistent resource value only on touched corpses.
+- Server-authoritative biological calculation.
+- No per-frame biological update.
+- No full-map zombie, corpse, or animal scan.
+- Corpse lookup uses active chunk indexes.
+- Animal lookup uses the game's active animal list and a bounded radius.
+- Zombie updates use sector batches.
+- Shared corpse resource is debited atomically.
+- Debug rendering is nearby-only and disabled by default.
+- Temporary object tables use weak references.
+- Save/reload cannot reroll an initialized reserve.
 
-## Prototype gates
+Dense-city profiling remains required before release.
 
-- [ ] Direct a zombie to an existing zombie corpse without attacking a living zombie.
-- [ ] Preserve native walking, kneeling, eating, sounds, interruption, and multiplayer synchronization.
-- [ ] Prevent duplicate calorie consumption by multiple eaters.
-- [ ] Preserve corpse calories and sector balances through save/reload.
-- [ ] Prevent chunk unload/reload from resetting reserves or creating fresh food.
-- [ ] Reconstruct an aged population when starting six months after the apocalypse.
-- [ ] Prevent vanilla respawn from injecting fresh energy into an old world.
-- [ ] Verify predictable decay in warm, cold, and freezing conditions.
-- [ ] Convert exhausted corpses to zero-calorie skeletons without stale eat targets.
-- [ ] Keep living Project A-Life NPCs untouched.
-- [ ] Include A-Life-created `IsoZombie` instances.
-- [ ] Verify server-authoritative single-player and multiplayer results.
-- [ ] Keep dense urban corpse fields within an acceptable performance budget.
+## Feasibility audit
+
+| Feature | Assessment | Evidence or limitation |
+|---|---|---|
+| Custom checkboxes | Verified | The mod already uses Build 42 custom sandbox options and UI hooks. |
+| Lock fixed deadline | Verified | Existing UI hook already supports it. |
+| One zombie reserve | Implemented; runtime test required | Uses synchronized zombie mod data and sector batches. |
+| One lazy corpse resource | Implemented; runtime test required | Uses native death age and absolute-age decay caps. |
+| Native corpse eating | Verified API path | Uses `setBodyToEat` and the game's eating state. |
+| Human/zombie corpse feeding | Implemented; runtime test required | Eligible `IsoDeadBody` objects are indexed by chunk. |
+| Animal corpse feeding | Implemented; runtime test required | Animal type and size APIs are present. |
+| Current rain support | Implemented; runtime test required | Climate, snow, temperature, and outdoor APIs are present. |
+| Living animal pursuit | Implemented target path; runtime gate | Full native attack sequence must be observed in game. |
+| Human skeleton conversion | Verified and implemented | Uses native `createCorpse(true)`. |
+| Animal skeletons | Species-dependent | Incorrect human skeleton fallback is prohibited. |
+| Preserve hard loot | Implemented; multiplayer test required | Uses native item containers and ground-item fallback. |
+| Historical start age | Implemented as an approximation | New objects use full apocalypse age. |
+| Exact individual off-screen routes | Not feasible in pure Lua | Engine virtualization requires aggregate sectors. |
+| Project A-Life exclusion | Implemented; integration test required | Checks known A-Life ownership markers. |
+| Ignore-player test mode | Implemented; runtime test required | Uses the native zombie-ignore flag. |
+| Biological overlay | Implemented; runtime test required | Uses active-zombie lists, world projection, and UI drawing. |
+
+## Mandatory runtime validation gates
+
+### Core simulation
+
+- [ ] One reserve persists through save and reload.
+- [ ] Chunk unload/reload cannot reroll reserve.
+- [ ] Early, average, and long-tail outcomes match the intended curve.
+- [ ] Rain helps only outdoors during liquid precipitation.
+- [ ] Snow gives no immediate hydration.
+- [ ] Rotten corpses lose resource without poisoning zombies.
+- [ ] Feeding cannot create resource through load/unload cycles.
+- [ ] A depleted zombie produces less resource than a fresh body.
+- [ ] Multiple eaters cannot debit a corpse twice.
+- [ ] Zombies never target living zombies as food.
+
+### Animals
+
+- [ ] Every vanilla animal corpse receives a sane resource amount.
+- [ ] Pathing and attack animation work for each animal size.
+- [ ] Native attack damage reaches animals correctly.
+- [ ] Animals flee and die through normal systems.
+- [ ] Multiplayer creates exactly one authoritative corpse.
+- [ ] Unsupported animal skeletons fall back safely.
+
+### Remains and loot
+
+- [ ] Human remains convert without deleting hard loot.
+- [ ] Only explicit clothing and soft containers are destroyed.
+- [ ] Nested bags are emptied first.
+- [ ] Unknown and modded items are preserved.
+- [ ] Container and ground transfer synchronize in multiplayer.
+
+### World history and compatibility
+
+- [ ] A six-month-later start reconstructs an aged population.
+- [ ] Vanilla population multipliers preserve the expected scale.
+- [ ] Peak day, migration, and respawn do not inject fresh reserves.
+- [ ] Sector timing advances persistent zombies exactly once.
+- [ ] Newly discovered regions do not contain biologically fresh zombies.
+- [ ] Living Project A-Life NPCs remain untouched.
+- [ ] Unmarked real `IsoZombie` objects from other mods participate.
+
+### Testing tools
+
+- [ ] Ignore-player mode stops aggression without god mode.
+- [ ] It does not hide the player from A-Life NPCs.
+- [ ] Disabling it restores the previous ordinary state.
+- [ ] Multiplayer restricts it to administrators.
+- [ ] Biological labels show nearby active zombies only.
+- [ ] Multiplayer labels contain server-authoritative values.
+- [ ] Dense-city overlay remains readable and performant.
+
+### Performance
+
+- [ ] No biological function executes per zombie per frame.
+- [ ] Dense-city server time remains acceptable.
+- [ ] Corpse fields do not cause a square scan per hungry zombie.
+- [ ] Overlay cost is negligible while disabled.
+- [ ] Long saves do not accumulate unbounded stale records.
 
 ## Release policy
 
-Natural Starvation will be optional in 1.1. The fixed extinction schedule remains available and remains the recommended stable mode until the new simulation completes every gate above.
+Natural Extinction will ship only after mandatory runtime gates pass.
 
-If reliable off-screen reconciliation cannot be achieved without replacing Project Zomboid Java classes, the feature will remain experimental and will not replace the stable Lua implementation.
+The final option does not use the word “experimental”, but removing that label
+does not lower the validation standard.
 
-## Research references
+Until runtime validation is complete:
 
-- FAO, *Human Energy Requirements*: https://www.fao.org/4/y5686e/y5686e07.htm
-- James Cole, *Assessing the calorific significance of episodes of human cannibalism in the Palaeolithic*: https://cris.brighton.ac.uk/ws/portalfiles/portal/445829/srep44707%20%281%29%20%281%29.pdf
-- Temperature and accumulated degree days in decomposition research: https://pmc.ncbi.nlm.nih.gov/articles/PMC5920129/
-- Project Zomboid Build 42.20 `IsoZombie` API: https://demiurgequantified.github.io/ProjectZomboidJavaDocs/zombie/characters/IsoZombie.html
-- Project Zomboid Build 42.20 `ZombiePopulationManager` API: https://demiurgequantified.github.io/ProjectZomboidJavaDocs/zombie/popman/ZombiePopulationManager.html
-- Project Zomboid Build 42 Lua events: https://demiurgequantified.github.io/ProjectZomboidLuaDocs/md_Events.html
+- fixed-timeline Extinction remains the stable released mode;
+- Natural Extinction remains disabled by default;
+- version 1.1 remains a local/feature-branch beta;
+- Steam Workshop is not updated;
+- `main` is not replaced.
 
+## References
+
+Biology, population, and climate:
+
+- FAO, Human Energy Requirements:
+  https://www.fao.org/4/y5686e/y5686e07.htm
+- James Cole, calorific significance of human cannibalism:
+  https://www.nature.com/articles/srep44707
+- CDC/NCHS, NHANES III:
+  https://wwwn.cdc.gov/nchs/nhanes/nhanes3/
+- U.S. Census Bureau, 1990 Census:
+  https://www.census.gov/programs-surveys/decennial-census/decade.1990.html
+- NOAA, U.S. Climate Normals:
+  https://www.ncei.noaa.gov/products/land-based-station/us-climate-normals
+- Decomposition and accumulated degree days:
+  https://pmc.ncbi.nlm.nih.gov/articles/PMC5920129/
+
+Project Zomboid Build 42 API:
+
+- `IsoZombie`:
+  https://demiurgequantified.github.io/ProjectZomboidJavaDocs/zombie/characters/IsoZombie.html
+- `IsoPlayer`:
+  https://demiurgequantified.github.io/ProjectZomboidJavaDocs/zombie/characters/IsoPlayer.html
+- `IsoAnimal`:
+  https://demiurgequantified.github.io/ProjectZomboidJavaDocs/zombie/characters/animals/IsoAnimal.html
+- `IsoDeadBody`:
+  https://demiurgequantified.github.io/ProjectZomboidJavaDocs/zombie/iso/objects/IsoDeadBody.html
+- `ClimateManager`:
+  https://demiurgequantified.github.io/ProjectZomboidJavaDocs/zombie/iso/weather/ClimateManager.html
+- `ZombiePopulationManager`:
+  https://demiurgequantified.github.io/ProjectZomboidJavaDocs/zombie/popman/ZombiePopulationManager.html
+- Build 42 Lua events:
+  https://demiurgequantified.github.io/ProjectZomboidLuaDocs/md_Events.html
+
+## Approval boundary
+
+The design is approved for implementation on the feature branch.
+
+This approval does not authorize:
+
+- merging version 1.1 into `main`;
+- creating a public GitHub release;
+- replacing the Steam Workshop build;
+- presenting unperformed in-game tests as completed.

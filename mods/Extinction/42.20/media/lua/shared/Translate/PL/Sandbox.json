@@ -1,9 +1,15 @@
 {
     "Sandbox_Extinction": "Extinction",
-    "Sandbox_Extinction.NaturalStarvation": "Włącz naturalną dystrybucję kalorii (eksperymentalne)",
-    "Sandbox_Extinction.NaturalStarvation_tooltip": "Zastępuje sztywny termin wymarcia eksperymentalną symulacją kalorii. Zombie otrzymują zróżnicowane zapasy energii, tracą kalorie z czasem i mogą żywić się wyłącznie już istniejącymi zwłokami. Nigdy nie atakują innych zombie dla pożywienia. Po włączeniu pole dni do całkowitego wymarcia jest ignorowane i blokowane; czas szkieletyzacji pozostaje konfigurowalny.",
+    "Sandbox_Extinction.NaturalStarvation": "Naturalne wymieranie",
+    "Sandbox_Extinction.NaturalStarvation_tooltip": "Zastępuje sztywny termin wymarcia symulacją jednej rezerwy biologicznej. Zombie słabną z czasem, korzystają z deszczu i mogą żywić się istniejącymi zwłokami ludzi, zombie oraz zwierząt. Nigdy nie atakują żywych zombie dla pożywienia. Po włączeniu pole dni do całkowitego wymarcia jest ignorowane i blokowane.",
+    "Sandbox_Extinction.HuntAnimals": "Zombie polują na żywe zwierzęta",
+    "Sandbox_Extinction.HuntAnimals_tooltip": "Używane tylko z naturalnym wymieraniem. Głodne zombie mogą ścigać żywe zwierzęta przy użyciu standardowego namierzania i ataku gry. Nadal nigdy nie polują na inne żywe zombie.",
     "Sandbox_Extinction.ExtinctionDays": "Dni do całkowitego wymarcia zombie",
     "Sandbox_Extinction.ExtinctionDays_tooltip": "Używane tylko wtedy, gdy naturalna dystrybucja kalorii jest wyłączona. Każde zwykłe zombie otrzymuje stałą, losową datę śmierci między początkiem apokalipsy a końcem podanego okresu. Standardowe ustawienie miesięcy od apokalipsy jest uwzględniane. Wartość 0 powoduje natychmiastowe wymarcie. Ustawienie nie dotyczy postaci Project A-Life.",
     "Sandbox_Extinction.SkeletonizationDays": "Dni od śmierci do szkieletyzacji",
-    "Sandbox_Extinction.SkeletonizationDays_tooltip": "Po tylu dniach od śmierci ciało zwykłego zombie zostaje zastąpione lekkim, nierozpoznawalnym szkieletem. Nadal obowiązują standardowe ustawienia usuwania zwłok. Wartość 0 wyłącza automatyczną szkieletyzację."
+    "Sandbox_Extinction.SkeletonizationDays_tooltip": "Po tylu dniach od śmierci ciało zwykłego zombie zostaje zastąpione lekkim, nierozpoznawalnym szkieletem. Twarde przedmioty, które można zachować, są przenoszone do szczątków. Nadal obowiązują standardowe ustawienia usuwania zwłok. Wartość 0 wyłącza automatyczną szkieletyzację.",
+    "Sandbox_Extinction.TestIgnorePlayer": "Testy: Zombie ignorują gracza",
+    "Sandbox_Extinction.TestIgnorePlayer_tooltip": "Narzędzie testowe, domyślnie wyłączone. Zombie ignorują lokalnego testera bez włączania nieśmiertelności i bez ukrywania gracza przed NPC. W trybie wieloosobowym opcja jest ograniczona do administratorów.",
+    "Sandbox_Extinction.TestShowBiologicalState": "Testy: Pokaż stan biologiczny zombie",
+    "Sandbox_Extinction.TestShowBiologicalState_tooltip": "Narzędzie testowe, domyślnie wyłączone. Nad pobliskimi aktywnymi zombie pokazuje rezerwę, orientacyjny czas przeżycia oraz aktualny stan biologiczny."
 }

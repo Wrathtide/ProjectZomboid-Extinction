@@ -2,6 +2,14 @@ require "OptionScreens/SandboxOptions"
 
 local NATURAL_OPTION = "Extinction.NaturalStarvation"
 local DEADLINE_OPTION = "Extinction.ExtinctionDays"
+local HUNT_ANIMALS_OPTION = "Extinction.HuntAnimals"
+local BIOLOGICAL_STATE_OPTION = "Extinction.TestShowBiologicalState"
+
+local function setTickBoxEnabled(control, enabled)
+    if control == nil then return end
+    control.enable = enabled
+    if control.setEnabled ~= nil then control:setEnabled(enabled) end
+end
 
 local function updateExtinctionControls(screen)
     if screen == nil or screen.controls == nil then return end
@@ -18,6 +26,9 @@ local function updateExtinctionControls(screen)
     else
         deadlineControl:setTextRGBA(1.0, 1.0, 1.0, 1.0)
     end
+
+    setTickBoxEnabled(screen.controls[HUNT_ANIMALS_OPTION], naturalEnabled)
+    setTickBoxEnabled(screen.controls[BIOLOGICAL_STATE_OPTION], naturalEnabled)
 end
 
 local originalOnTickBoxSelected = SandboxOptionsScreen.onTickBoxSelected

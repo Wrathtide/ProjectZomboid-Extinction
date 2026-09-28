@@ -1,8 +1,8 @@
 name=Extinction
 id=Extinction
 author=Codex for kwasn
-modversion=1.1.0-beta.1
+modversion=1.1.0-beta.2
 versionMin=42.20.0
 poster=poster.png
 icon=icon.png
-description=Ordinary zombies die out on a configurable timeline or through an optional experimental calorie simulation. Project A-Life compatible.
+description=Ordinary zombies die out on a configurable timeline or through an optional natural biological-reserve simulation. Project A-Life compatible.

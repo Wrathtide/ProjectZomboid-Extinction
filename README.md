@@ -1,8 +1,8 @@
 # Extinction
 
-> **Update 1.1 beta — Natural Starvation**
+> **Update 1.1 beta — Natural Extinction**
 >
-> The optional experimental mode is now implemented for prototype testing. Zombies never attack one another, but may survive temporarily by feeding on corpses that already exist. Metabolism, imperfect digestion, and decomposition steadily drain the world's finite energy until the population dies out naturally.
+> The optional biological-reserve mode is implemented for local runtime testing. Zombies never attack one another, but may obtain water from rain, feed on existing human, zombie, and animal corpses, and optionally hunt living animals. The simulation uses one persistent biological value per zombie and one resource value per used corpse.
 >
 > **[Read the researched Update 1.1 project →](docs/UPDATE_1.1_NATURAL_STARVATION.md)**
 
@@ -33,9 +33,12 @@ Extinction is an independent fan-made project. It is not an adaptation, contains
 - Ordinary zombies created by vanilla or other mods remain subject to extinction.
 - Full compatibility with standard Project Zomboid sandbox population and corpse settings.
 - English and Polish in-game sandbox-option text.
-- Optional experimental natural-starvation mode with persistent calorie reserves.
-- Native corpse-eating behaviour for hungry zombies, including zombie corpses.
-- Temperature-dependent loss of edible corpse calories.
+- Optional natural-extinction mode with one persistent biological reserve per zombie.
+- Rain and temperature affect survival without adding separate hydration fields.
+- Native corpse-eating behaviour for human, zombie, and animal remains.
+- Optional pursuit of living animals through the game's native targeting path.
+- Consumed bodies preserve hard loot while selected clothing and soft bags are removed.
+- Two opt-in test tools: zombie-ignore mode and biological-state labels.
 
 ## Extinction schedule
 
@@ -99,7 +102,8 @@ Ordinary zombie corpses are tracked until they reach the configured age. The def
 When the delay has elapsed:
 
 - the detailed corpse is replaced by a native Project Zomboid skeleton,
-- clothing, inventory, and identifying visual details are discarded,
+- selected clothing and soft containers are discarded,
+- nested and hard items are transferred to the skeleton or dropped on the same square,
 - the position and historical death age are retained,
 - the resulting skeleton is no longer actively processed by the mod.
 
@@ -122,7 +126,7 @@ In particular:
 - Corpse sickness uses exactly the standard value selected by the player.
 - Start month, start day, start year, and `TimeSinceApo` remain untouched.
 
-The mod adds three independent settings of its own: the optional natural-starvation toggle, the fixed-mode extinction deadline, and the skeletonization delay. None of them substitutes for a vanilla population option. Enabling natural starvation disables the fixed deadline without changing any standard population setting.
+The mod adds its own natural-mode, fixed-deadline, skeletonization, animal-hunting, and testing controls. None substitutes for a vanilla population option. Enabling Natural Extinction disables the fixed deadline without changing any standard population setting.
 
 ## Project A-Life compatibility
 
@@ -152,19 +156,34 @@ Compatibility has been specifically implemented and checked for **Project A-Life
 
 Enabling the mod adds an **Extinction** page to the sandbox settings.
 
-### Enable natural calorie distribution (experimental)
+### Natural extinction
 
 - Default: `Off`
 - When disabled, Extinction uses the stable fixed extinction deadline.
 - When enabled, the fixed deadline field is locked and ignored.
-- Every zombie receives a varied metabolic requirement and starting energy reserve.
-- Approximately 15% of zombies receive only `0.5–3` days of reserve, 50% receive `3–14` days, 28% receive `14–30` days, and 7% receive `30–55` days before any food is considered.
-- Hungry zombies may use only existing, non-skeletal human or zombie corpses.
+- Every zombie stores one composite biological reserve.
+- The population uses a continuous survival curve with frail early failures and a very small long-lived tail.
+- Rain, temperature, activity, corpse feeding, and reserve-dependent systemic failure affect survival.
+- Hungry zombies may use existing, non-skeletal human, zombie, or animal corpses.
 - Zombies never attack living zombies to obtain food.
-- Calories removed from a corpse are shared and cannot be consumed twice.
-- Imperfect digestion, metabolism, and temperature-dependent decomposition permanently remove energy from the system.
-- A late-created zombie is aged from the beginning of the apocalypse. It may cover its historical deficit only from calories actually present in nearby corpses; otherwise it is converted into historically dated remains.
-- This mode is a beta feature. Exact individual off-screen histories are approximated when a region becomes active.
+- Resources removed from a corpse are shared and cannot be consumed twice.
+- Digestion, metabolism, and decomposition permanently remove resources from the system.
+- Late-created zombies are aged from the beginning of the apocalypse.
+- Exact off-screen routes are approximated through persistent 50×50-tile sector timing.
+
+### Zombies hunt living animals
+
+- Default: `On`
+- Used only by Natural Extinction.
+- A hungry zombie that found no corpse may target a nearby living animal.
+- The game supplies targeting, pathing, attack, flee, death, and corpse behaviour.
+- Full animal animation and multiplayer validation remains a required in-game test.
+
+### Testing tools
+
+- **Zombies ignore player**: allows an eligible tester to observe behaviour without god mode or NPC invisibility.
+- **Show zombie biological state**: displays reserve, approximate baseline survival time, and current state over nearby zombies.
+- Both options default to `Off`.
 
 ### Days until complete zombie extinction
 
@@ -198,7 +217,7 @@ Enable **Extinction** when creating a new world. When using Project A-Life, enab
 ## Version and validation
 
 - Target game version: **Project Zomboid Build 42.20+**.
-- Mod version: **1.1.0-beta.1**.
+- Mod version: **1.1.0-beta.2**.
 - Lua syntax is checked with the Kahlua parser shipped with the local game installation.
 - Events and Java methods are verified directly against the local `projectzomboid.jar`.
 - Sandbox-option and translation files are validated statically.
@@ -215,6 +234,7 @@ mods/Extinction/42.20/
     ├── sandbox-options.txt
     └── lua/
         ├── client/Extinction/ExtinctionSandboxUI.lua
+        ├── client/Extinction/ExtinctionTestTools.lua
         ├── server/Extinction/ExtinctionServer.lua
         ├── server/Extinction/ExtinctionNaturalStarvation.lua
         └── shared/Translate/
