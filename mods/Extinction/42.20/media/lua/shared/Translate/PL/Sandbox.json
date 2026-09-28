@@ -8,8 +8,6 @@
     "Sandbox_Extinction.ExtinctionDays_tooltip": "Używane tylko wtedy, gdy naturalna dystrybucja kalorii jest wyłączona. Każde zwykłe zombie otrzymuje stałą, losową datę śmierci między początkiem apokalipsy a końcem podanego okresu. Standardowe ustawienie miesięcy od apokalipsy jest uwzględniane. Wartość 0 powoduje natychmiastowe wymarcie. Ustawienie nie dotyczy postaci Project A-Life.",
     "Sandbox_Extinction.SkeletonizationDays": "Dni od śmierci do szkieletyzacji",
     "Sandbox_Extinction.SkeletonizationDays_tooltip": "Po tylu dniach od śmierci ciało zwykłego zombie zostaje zastąpione lekkim, nierozpoznawalnym szkieletem. Twarde przedmioty, które można zachować, są przenoszone do szczątków. Nadal obowiązują standardowe ustawienia usuwania zwłok. Wartość 0 wyłącza automatyczną szkieletyzację.",
-    "Sandbox_Extinction.TestIgnorePlayer": "Testy: Zombie ignorują gracza",
-    "Sandbox_Extinction.TestIgnorePlayer_tooltip": "Narzędzie testowe, domyślnie wyłączone. Zombie ignorują lokalnego testera bez włączania nieśmiertelności i bez ukrywania gracza przed NPC. W trybie wieloosobowym opcja jest ograniczona do administratorów.",
     "Sandbox_Extinction.TestShowBiologicalState": "Testy: Pokaż stan biologiczny zombie",
     "Sandbox_Extinction.TestShowBiologicalState_tooltip": "Narzędzie testowe, domyślnie wyłączone. Nad pobliskimi aktywnymi zombie pokazuje rezerwę, orientacyjny czas przeżycia oraz aktualny stan biologiczny."
 }

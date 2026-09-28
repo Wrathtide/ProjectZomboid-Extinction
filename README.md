@@ -34,11 +34,12 @@ Extinction is an independent fan-made project. It is not an adaptation, contains
 - Full compatibility with standard Project Zomboid sandbox population and corpse settings.
 - English and Polish in-game sandbox-option text.
 - Optional natural-extinction mode with one persistent biological reserve per zombie.
+- A medically grounded 21-day hard cap on biological reserve, including after feeding or rain.
 - Rain and temperature affect survival without adding separate hydration fields.
 - Native corpse-eating behaviour for human, zombie, and animal remains.
 - Optional pursuit of living animals through the game's native targeting path.
 - Consumed bodies preserve hard loot while selected clothing and soft bags are removed.
-- Two opt-in test tools: zombie-ignore mode and biological-state labels.
+- An opt-in biological-state overlay for runtime testing.
 
 ## Extinction schedule
 
@@ -162,7 +163,8 @@ Enabling the mod adds an **Extinction** page to the sandbox settings.
 - When disabled, Extinction uses the stable fixed extinction deadline.
 - When enabled, the fixed deadline field is locked and ignored.
 - Every zombie stores one composite biological reserve.
-- The population uses a continuous survival curve with frail early failures and a very small long-lived tail.
+- The initial reserve follows a survival curve dominated by 3–7 days, with only a 0.5% tail reaching 18–21 days.
+- The reserve can never exceed 21 days, including after corpse feeding or rain.
 - Rain, temperature, activity, corpse feeding, and reserve-dependent systemic failure affect survival.
 - Hungry zombies may use existing, non-skeletal human, zombie, or animal corpses.
 - Zombies never attack living zombies to obtain food.
@@ -179,11 +181,10 @@ Enabling the mod adds an **Extinction** page to the sandbox settings.
 - The game supplies targeting, pathing, attack, flee, death, and corpse behaviour.
 - Full animal animation and multiplayer validation remains a required in-game test.
 
-### Testing tools
+### Testing overlay
 
-- **Zombies ignore player**: allows an eligible tester to observe behaviour without god mode or NPC invisibility.
-- **Show zombie biological state**: displays reserve, approximate baseline survival time, and current state over nearby zombies.
-- Both options default to `Off`.
+- **Show zombie biological state** displays reserve, approximate baseline survival time, and current state over nearby zombies.
+- The option defaults to `Off`.
 
 ### Days until complete zombie extinction
 
@@ -217,7 +218,7 @@ Enable **Extinction** when creating a new world. When using Project A-Life, enab
 ## Version and validation
 
 - Target game version: **Project Zomboid Build 42.20+**.
-- Mod version: **1.1.0-beta.4**.
+- Mod version: **1.1.0-beta.5**.
 - Lua syntax is checked with the Kahlua parser shipped with the local game installation.
 - Events and Java methods are verified directly against the local `projectzomboid.jar`.
 - Sandbox-option and translation files are validated statically.

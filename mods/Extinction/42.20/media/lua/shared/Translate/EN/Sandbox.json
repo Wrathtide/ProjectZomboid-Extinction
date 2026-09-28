@@ -8,8 +8,6 @@
     "Sandbox_Extinction.ExtinctionDays_tooltip": "Used only when natural calorie distribution is disabled. Every ordinary zombie receives one permanent random death date between the beginning of the apocalypse and the end of this period. The standard Months Since the Apocalypse setting is respected. A value of 0 causes immediate extinction. Project A-Life characters are not affected.",
     "Sandbox_Extinction.SkeletonizationDays": "Days from death to skeletonization",
     "Sandbox_Extinction.SkeletonizationDays_tooltip": "After this many days, an ordinary zombie corpse is replaced with a lightweight, unidentifiable skeleton. Preservable hard loot is transferred to the remains. Standard corpse-removal settings still apply. A value of 0 disables automatic skeletonization.",
-    "Sandbox_Extinction.TestIgnorePlayer": "Testing: Zombies ignore player",
-    "Sandbox_Extinction.TestIgnorePlayer_tooltip": "Testing aid, disabled by default. Zombies ignore the local tester without enabling god mode or making the player invisible to NPCs. On multiplayer clients it is restricted to administrators.",
     "Sandbox_Extinction.TestShowBiologicalState": "Testing: Show zombie biological state",
     "Sandbox_Extinction.TestShowBiologicalState_tooltip": "Testing aid, disabled by default. Shows a compact reserve, estimated survival time, and current biological state above nearby active zombies."
 }

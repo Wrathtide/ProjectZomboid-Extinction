@@ -24,12 +24,6 @@ option Extinction.SkeletonizationDays = {
     _tooltip = Extinction.SkeletonizationDays_tooltip,
 }
 
-option Extinction.TestIgnorePlayer = {
-    type = boolean, default = false,
-    page = Extinction, translation = Extinction.TestIgnorePlayer,
-    _tooltip = Extinction.TestIgnorePlayer_tooltip,
-}
-
 option Extinction.TestShowBiologicalState = {
     type = boolean, default = false,
     page = Extinction, translation = Extinction.TestShowBiologicalState,

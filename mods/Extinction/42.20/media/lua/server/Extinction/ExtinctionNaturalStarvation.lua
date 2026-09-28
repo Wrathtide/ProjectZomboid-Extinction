@@ -5,7 +5,10 @@ Extinction.NaturalStarvation = NS
 
 local HOURS_PER_DAY = 24
 local BASELINE_DAILY_DRAIN = 1.0
-local MAX_RESERVE_DAYS = 180
+-- Forensic reviews place exceptional survival without both food and fluid at
+-- roughly 8-21 days. The reserve is therefore a short-term biological buffer,
+-- not a store of every calorie contained in the body.
+local MAX_RESERVE_DAYS = 21
 local HUNGER_RESERVE_DAYS = 4
 local ASSIMILATION_EFFICIENCY = 0.70
 local CONSUMPTION_RESOURCE_PER_HOUR = 0.36
@@ -137,16 +140,14 @@ local function sampleInitialReserveDays()
     local roll = randomUnit()
     if roll < 0.10 then
         return randomRange(1, 3)
-    elseif roll < 0.40 then
-        return randomRange(3, 10)
-    elseif roll < 0.75 then
-        return randomRange(10, 25)
+    elseif roll < 0.65 then
+        return randomRange(3, 7)
     elseif roll < 0.95 then
-        return randomRange(25, 60)
+        return randomRange(7, 12)
     elseif roll < 0.995 then
-        return randomRange(60, 120)
+        return randomRange(12, 18)
     end
-    return randomRange(120, 180)
+    return randomRange(18, MAX_RESERVE_DAYS)
 end
 
 local function chunkKeyFor(object)
@@ -493,6 +494,8 @@ end
 local function migrateZombieReserve(data)
     local reserve = tonumber(data.ExtinctionBiologicalReserve)
     if reserve ~= nil then
+        reserve = clamp(reserve, 0, MAX_RESERVE_DAYS)
+        data.ExtinctionBiologicalReserve = reserve
         clearKeys(data, LEGACY_ZOMBIE_KEYS)
         data.ExtinctionDeathAgeHours = nil
         data.ExtinctionVersion = nil
@@ -561,13 +564,26 @@ local function consumeFromCurrentTarget(zombie, data, elapsedHours, currentHour)
         return
     end
 
-    local requested = CONSUMPTION_RESOURCE_PER_HOUR * elapsedHours
+    local reserve = clamp(
+        tonumber(data.ExtinctionBiologicalReserve) or 0,
+        0,
+        MAX_RESERVE_DAYS
+    )
+    local remainingCapacity = MAX_RESERVE_DAYS - reserve
+    if remainingCapacity <= 0 then
+        detachZombieFromBody(zombie)
+        return
+    end
+
+    local requested = math.min(
+        CONSUMPTION_RESOURCE_PER_HOUR * elapsedHours,
+        remainingCapacity / ASSIMILATION_EFFICIENCY
+    )
     local consumed = takeResourceFromBody(body, requested, currentHour)
     if consumed <= 0 then
         detachZombieFromBody(zombie)
         return
     end
-    local reserve = tonumber(data.ExtinctionBiologicalReserve) or 0
     data.ExtinctionBiologicalReserve = math.min(
         MAX_RESERVE_DAYS,
         reserve + consumed * ASSIMILATION_EFFICIENCY
@@ -781,7 +797,8 @@ function NS.markStarvationCorpse(body, sourceData, deathAgeHours)
     local data = NS.context.safeModData(body)
     if data == nil then return end
     local sourceReserve = tonumber(sourceData and sourceData.ExtinctionBiologicalReserve) or 0
-    local residualFraction = 0.40 + 0.10 * clamp(sourceReserve / 30, 0, 1)
+    local residualFraction = 0.40
+        + 0.10 * clamp(sourceReserve / MAX_RESERVE_DAYS, 0, 1)
     data.ExtinctionCorpseResource = HUMAN_CORPSE_RESOURCE
         * randomRange(0.70, 1.30)
         * residualFraction

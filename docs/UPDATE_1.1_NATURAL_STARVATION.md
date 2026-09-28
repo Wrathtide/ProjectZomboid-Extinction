@@ -39,7 +39,6 @@ Non-negotiable rules:
 | Days Until Complete Zombie Extinction | Integer | 21 | Used only in fixed mode. Locked and ignored in natural mode. |
 | Days From Death to Skeletonization | Integer | 180 | Remains available in both modes. |
 | Zombies Hunt Living Animals | Checkbox | On | Allows hungry zombies to select living animals as prey in natural mode. |
-| Testing: Zombies Ignore Player | Checkbox | Off | Lets an eligible tester observe zombies without becoming their target. |
 | Testing: Show Zombie Biological State | Checkbox | Off | Draws a compact state label over nearby active zombies. |
 
 Natural Extinction remains disabled by default. The fixed extinction schedule
@@ -86,14 +85,23 @@ The implemented beta curve is continuous inside these population bands:
 | Population share | Baseline reserve before environmental support |
 |---:|---:|
 | 10% | 1–3 days |
-| 30% | 3–10 days |
-| 35% | 10–25 days |
-| 20% | 25–60 days |
-| 4.5% | 60–120 days |
-| 0.5% | 120–180 days |
+| 55% | 3–7 days |
+| 30% | 7–12 days |
+| 4.5% | 12–18 days |
+| 0.5% | 18–21 days |
 
-These are balancing bands, not claims about fictional zombie medicine. They
-must be tuned from repeated population simulations and in-game observation.
+The 21-day ceiling follows a forensic review that places exceptional survival
+without both food and fluid at approximately 8–21 days. Other reviews describe
+death without water as generally occurring within about a week, while food-only
+deprivation can last for weeks. The ceiling is therefore deliberately an
+extreme outlier rather than a typical outcome:
+
+- https://pubmed.ncbi.nlm.nih.gov/20069776/
+- https://pmc.ncbi.nlm.nih.gov/articles/PMC2849909/
+
+Feeding, food moisture, and liquid rain may replenish the reserve but can never
+raise it above 21 days. Once full, further intake provides no additional
+reserve. Existing saved values above the ceiling are clamped when processed.
 
 ### Active update
 
@@ -340,32 +348,11 @@ Examples:
 - A mod-created hostile participates only if it is an actual `IsoZombie` and
   is not marked as an owned NPC actor or shell.
 - Real zombies created by another mod follow the same extinction rules.
-- Test invisibility uses only the zombie-ignore flag and does not hide the
-  player from A-Life NPCs.
-
 A dedicated Project A-Life runtime test remains mandatory.
 
-## Testing tools
+## Testing overlay
 
-Both tools are simple sandbox checkboxes and default to Off.
-
-### Testing: Zombies Ignore Player
-
-Purpose: allow observation of feeding, starvation, and animal hunting without
-interrupting the tested behaviour.
-
-Implementation:
-
-- uses `setZombiesDontAttack(boolean)`;
-- does not enable god mode;
-- does not make the player invisible;
-- applies to the local player in single-player;
-- is restricted to non-`None` access levels on multiplayer clients;
-- records whether Extinction changed the flag;
-- restores the ordinary state only when Extinction enabled it.
-
-Runtime tests must confirm multiplayer authority and interaction with other
-administration mods.
+The overlay is a simple sandbox checkbox and defaults to Off.
 
 ### Testing: Show Zombie Biological State
 
@@ -394,7 +381,7 @@ The overlay:
 - reads synchronized zombie mod data;
 - creates no additional persistent biological fields;
 - performs no drawing work while disabled;
-- is restricted to eligible administrators on multiplayer clients.
+- is client-side and intended only as a temporary diagnostic display.
 
 ## Performance rules
 
@@ -432,7 +419,6 @@ Dense-city profiling remains required before release.
 | Historical start age | Implemented as an approximation | New objects use full apocalypse age. |
 | Exact individual off-screen routes | Not feasible in pure Lua | Engine virtualization requires aggregate sectors. |
 | Project A-Life exclusion | Implemented; integration test required | Checks known A-Life ownership markers. |
-| Ignore-player test mode | Implemented; runtime test required | Uses the native zombie-ignore flag. |
 | Biological overlay | Implemented; runtime test required | Uses active-zombie lists, world projection, and UI drawing. |
 
 ## Mandatory runtime validation gates
@@ -477,12 +463,8 @@ Dense-city profiling remains required before release.
 - [ ] Living Project A-Life NPCs remain untouched.
 - [ ] Unmarked real `IsoZombie` objects from other mods participate.
 
-### Testing tools
+### Testing overlay
 
-- [ ] Ignore-player mode stops aggression without god mode.
-- [ ] It does not hide the player from A-Life NPCs.
-- [ ] Disabling it restores the previous ordinary state.
-- [ ] Multiplayer restricts it to administrators.
 - [ ] Biological labels show nearby active zombies only.
 - [ ] Multiplayer labels contain server-authoritative values.
 - [ ] Dense-city overlay remains readable and performant.

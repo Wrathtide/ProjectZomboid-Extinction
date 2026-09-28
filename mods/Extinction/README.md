@@ -11,11 +11,11 @@ fixed deadline. Each active zombie stores one biological reserve, and each
 corpse used as food stores one shared resource value. Rain, temperature,
 activity, corpse feeding, and systemic failure affect survival. Human, zombie,
 and animal corpses are eligible; living animal hunting is separately
-configurable. Zombies never attack living zombies for food.
+configurable. Zombies never attack living zombies for food. Biological reserve
+is capped at 21 days even after feeding or rain.
 
-Two disabled-by-default testing checkboxes allow an eligible tester to make
-zombies ignore the player and to display a compact biological-state label over
-nearby zombies.
+One disabled-by-default testing checkbox displays a compact biological-state
+label over nearby zombies.
 
 ## Inspiration
 
@@ -187,7 +187,7 @@ Enable **Extinction** when creating a new world. When using Project A-Life, enab
 ## Version and validation
 
 - Target game version: **Project Zomboid Build 42.20+**.
-- Mod version: **1.1.0-beta.4**.
+- Mod version: **1.1.0-beta.5**.
 - Lua syntax is checked with the Kahlua parser shipped with the local game installation.
 - Events and Java methods are verified directly against the local `projectzomboid.jar`.
 - Sandbox-option and translation files are validated statically.
