@@ -1,7 +1,9 @@
 {
     "Sandbox_Extinction": "Extinction",
+    "Sandbox_Extinction.NaturalStarvation": "Enable natural calorie distribution (experimental)",
+    "Sandbox_Extinction.NaturalStarvation_tooltip": "Replaces the fixed extinction deadline with an experimental calorie simulation. Zombies receive varied energy reserves, lose calories over time, and may feed only on corpses that already exist. They never attack other zombies for food. When enabled, Days until complete zombie extinction is ignored and locked; skeletonization remains configurable.",
     "Sandbox_Extinction.ExtinctionDays": "Days until complete zombie extinction",
-    "Sandbox_Extinction.ExtinctionDays_tooltip": "Every ordinary zombie receives one permanent random death date between the beginning of the apocalypse and the end of this period. The standard Months Since the Apocalypse setting is respected. A value of 0 causes immediate extinction. Project A-Life characters are not affected.",
+    "Sandbox_Extinction.ExtinctionDays_tooltip": "Used only when natural calorie distribution is disabled. Every ordinary zombie receives one permanent random death date between the beginning of the apocalypse and the end of this period. The standard Months Since the Apocalypse setting is respected. A value of 0 causes immediate extinction. Project A-Life characters are not affected.",
     "Sandbox_Extinction.SkeletonizationDays": "Days from death to skeletonization",
     "Sandbox_Extinction.SkeletonizationDays_tooltip": "After this many days, an ordinary zombie corpse is replaced with a lightweight, unidentifiable skeleton. Standard corpse-removal settings still apply. A value of 0 disables automatic skeletonization."
 }

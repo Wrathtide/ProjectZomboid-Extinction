@@ -104,6 +104,7 @@ local function trackBody(body)
     if body == nil or type(instanceof) ~= "function" or not instanceof(body, "IsoDeadBody") then
         return
     end
+    if QE.NaturalStarvation ~= nil then QE.NaturalStarvation.trackBody(body) end
     if body.isAnimal ~= nil and body:isAnimal() then return end
     if body.isPlayer ~= nil and body:isPlayer() then return end
     if belongsToProjectALife(body) then return end
@@ -154,6 +155,12 @@ end
 local function processZombie(zombie)
     if zombie == nil or belongsToProjectALife(zombie) then return end
     if zombie.isDead ~= nil and zombie:isDead() then return end
+
+    if QE.NaturalStarvation ~= nil and QE.NaturalStarvation.isEnabled() then
+        QE.NaturalStarvation.processZombie(zombie)
+        return
+    end
+
     local data = safeModData(zombie)
     if data == nil then return end
 
@@ -236,6 +243,7 @@ local function createSkeletonFromBody(body)
     end
 
     QE.trackedBodies[body] = nil
+    if QE.NaturalStarvation ~= nil then QE.NaturalStarvation.untrackBody(body) end
     pcall(function() square:removeCorpse(body, false) end)
     transmitModData(skeleton)
     sendNewCorpse(skeleton)
@@ -300,9 +308,20 @@ local function onGameStart()
     scanAllActiveZombies()
 end
 
+QE.NaturalStarvation = require "Extinction/ExtinctionNaturalStarvation"
+QE.NaturalStarvation.configure({
+    apocalypseAgeHours = apocalypseAgeHours,
+    bodyDeathAgeHours = bodyDeathAgeHours,
+    safeModData = safeModData,
+    belongsToProjectALife = belongsToProjectALife,
+    transmitModData = transmitModData,
+    convertZombieToBody = convertZombieToBody,
+})
+
 Events.OnZombieCreate.Add(queueZombie)
 Events.OnTick.Add(onTick)
 Events.EveryOneMinute.Add(scanAllActiveZombies)
+Events.EveryTenMinutes.Add(QE.NaturalStarvation.processBodies)
 Events.EveryHours.Add(processTrackedBodies)
 Events.LoadGridsquare.Add(scanSquareForBodies)
 Events.LoadChunk.Add(scanChunkForBodies)

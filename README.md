@@ -1,8 +1,8 @@
 # Extinction
 
-> **Roadmap — Update 1.1: Natural Starvation**
+> **Update 1.1 beta — Natural Starvation**
 >
-> Zombies will never attack one another, but may survive temporarily by feeding on corpses that already exist. Metabolism, imperfect digestion, and decomposition will steadily drain the world's finite energy until the population dies out naturally.
+> The optional experimental mode is now implemented for prototype testing. Zombies never attack one another, but may survive temporarily by feeding on corpses that already exist. Metabolism, imperfect digestion, and decomposition steadily drain the world's finite energy until the population dies out naturally.
 >
 > **[Read the researched Update 1.1 project →](docs/UPDATE_1.1_NATURAL_STARVATION.md)**
 
@@ -33,6 +33,9 @@ Extinction is an independent fan-made project. It is not an adaptation, contains
 - Ordinary zombies created by vanilla or other mods remain subject to extinction.
 - Full compatibility with standard Project Zomboid sandbox population and corpse settings.
 - English and Polish in-game sandbox-option text.
+- Optional experimental natural-starvation mode with persistent calorie reserves.
+- Native corpse-eating behaviour for hungry zombies, including zombie corpses.
+- Temperature-dependent loss of edible corpse calories.
 
 ## Extinction schedule
 
@@ -119,7 +122,7 @@ In particular:
 - Corpse sickness uses exactly the standard value selected by the player.
 - Start month, start day, start year, and `TimeSinceApo` remain untouched.
 
-The mod adds only two independent settings of its own: the extinction deadline and the skeletonization delay. Neither setting substitutes for a vanilla population option.
+The mod adds three independent settings of its own: the optional natural-starvation toggle, the fixed-mode extinction deadline, and the skeletonization delay. None of them substitutes for a vanilla population option. Enabling natural starvation disables the fixed deadline without changing any standard population setting.
 
 ## Project A-Life compatibility
 
@@ -149,12 +152,27 @@ Compatibility has been specifically implemented and checked for **Project A-Life
 
 Enabling the mod adds an **Extinction** page to the sandbox settings.
 
+### Enable natural calorie distribution (experimental)
+
+- Default: `Off`
+- When disabled, Extinction uses the stable fixed extinction deadline.
+- When enabled, the fixed deadline field is locked and ignored.
+- Every zombie receives a varied metabolic requirement and starting energy reserve.
+- Approximately 15% of zombies receive only `0.5–3` days of reserve, 50% receive `3–14` days, 28% receive `14–30` days, and 7% receive `30–55` days before any food is considered.
+- Hungry zombies may use only existing, non-skeletal human or zombie corpses.
+- Zombies never attack living zombies to obtain food.
+- Calories removed from a corpse are shared and cannot be consumed twice.
+- Imperfect digestion, metabolism, and temperature-dependent decomposition permanently remove energy from the system.
+- A late-created zombie is aged from the beginning of the apocalypse. It may cover its historical deficit only from calories actually present in nearby corpses; otherwise it is converted into historically dated remains.
+- This mode is a beta feature. Exact individual off-screen histories are approximated when a region becomes active.
+
 ### Days until complete zombie extinction
 
 - Default: `21`
 - Minimum: `0`
 - Maximum: `3650`
 - `0` means immediate extinction.
+- Ignored and locked when natural calorie distribution is enabled.
 
 The entire probability distribution scales automatically to the selected value.
 
@@ -180,7 +198,7 @@ Enable **Extinction** when creating a new world. When using Project A-Life, enab
 ## Version and validation
 
 - Target game version: **Project Zomboid Build 42.20+**.
-- Mod version: **1.0.1**.
+- Mod version: **1.1.0-beta.1**.
 - Lua syntax is checked with the Kahlua parser shipped with the local game installation.
 - Events and Java methods are verified directly against the local `projectzomboid.jar`.
 - Sandbox-option and translation files are validated statically.
@@ -196,7 +214,9 @@ mods/Extinction/42.20/
 └── media/
     ├── sandbox-options.txt
     └── lua/
+        ├── client/Extinction/ExtinctionSandboxUI.lua
         ├── server/Extinction/ExtinctionServer.lua
+        ├── server/Extinction/ExtinctionNaturalStarvation.lua
         └── shared/Translate/
             ├── EN/Sandbox.json
             └── PL/Sandbox.json

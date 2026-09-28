@@ -1,7 +1,9 @@
 {
     "Sandbox_Extinction": "Extinction",
+    "Sandbox_Extinction.NaturalStarvation": "Włącz naturalną dystrybucję kalorii (eksperymentalne)",
+    "Sandbox_Extinction.NaturalStarvation_tooltip": "Zastępuje sztywny termin wymarcia eksperymentalną symulacją kalorii. Zombie otrzymują zróżnicowane zapasy energii, tracą kalorie z czasem i mogą żywić się wyłącznie już istniejącymi zwłokami. Nigdy nie atakują innych zombie dla pożywienia. Po włączeniu pole dni do całkowitego wymarcia jest ignorowane i blokowane; czas szkieletyzacji pozostaje konfigurowalny.",
     "Sandbox_Extinction.ExtinctionDays": "Dni do całkowitego wymarcia zombie",
-    "Sandbox_Extinction.ExtinctionDays_tooltip": "Każde zwykłe zombie otrzymuje stałą, losową datę śmierci między początkiem apokalipsy a końcem podanego okresu. Standardowe ustawienie miesięcy od apokalipsy jest uwzględniane. Wartość 0 powoduje natychmiastowe wymarcie. Ustawienie nie dotyczy postaci Project A-Life.",
+    "Sandbox_Extinction.ExtinctionDays_tooltip": "Używane tylko wtedy, gdy naturalna dystrybucja kalorii jest wyłączona. Każde zwykłe zombie otrzymuje stałą, losową datę śmierci między początkiem apokalipsy a końcem podanego okresu. Standardowe ustawienie miesięcy od apokalipsy jest uwzględniane. Wartość 0 powoduje natychmiastowe wymarcie. Ustawienie nie dotyczy postaci Project A-Life.",
     "Sandbox_Extinction.SkeletonizationDays": "Dni od śmierci do szkieletyzacji",
     "Sandbox_Extinction.SkeletonizationDays_tooltip": "Po tylu dniach od śmierci ciało zwykłego zombie zostaje zastąpione lekkim, nierozpoznawalnym szkieletem. Nadal obowiązują standardowe ustawienia usuwania zwłok. Wartość 0 wyłącza automatyczną szkieletyzację."
 }

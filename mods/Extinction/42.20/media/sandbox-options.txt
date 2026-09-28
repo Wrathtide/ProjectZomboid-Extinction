@@ -1,5 +1,11 @@
 VERSION = 1,
 
+option Extinction.NaturalStarvation = {
+    type = boolean, default = false,
+    page = Extinction, translation = Extinction.NaturalStarvation,
+    _tooltip = Extinction.NaturalStarvation_tooltip,
+}
+
 option Extinction.ExtinctionDays = {
     type = integer, min = 0, max = 3650, default = 21,
     page = Extinction, translation = Extinction.ExtinctionDays,

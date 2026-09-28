@@ -1,6 +1,6 @@
 # Extinction 1.1 Project — Natural Starvation
 
-> Status: researched and technically feasible, pending prototype validation.
+> Status: prototype implemented on the `feature/natural-starvation-1.1` branch; runtime validation is still required.
 >
 > This document is a design target, not a promise that every item below is already implemented.
 
@@ -9,6 +9,22 @@
 Version 1.1 is planned to add an optional natural-extinction simulation alongside Extinction's stable fixed-timeline mode.
 
 Zombies will consume energy every day. They may survive longer by feeding on corpses that already exist, but they will never attack or damage other zombies to obtain food. Corpse decomposition, metabolic losses, and imperfect digestion will continuously remove energy from the closed system. As edible remains disappear, the zombie population will gradually starve.
+
+The sandbox page now exposes this system as **Enable natural calorie distribution (experimental)**. It is disabled by default. Enabling it locks and ignores the fixed extinction-days field while leaving skeletonization configurable.
+
+## Implemented beta scope
+
+- Individual persistent energy reserves and metabolic requirements for loaded zombies.
+- A deliberately broad, weighted no-food survival distribution: 15% at 0.5–3 days, 50% at 3–14 days, 28% at 14–30 days, and 7% at 30–55 days.
+- A shared per-corpse calorie pool with 70% assimilation efficiency and a three-eater limit inherited from the native game behaviour.
+- Feeding from existing human and zombie corpses without selecting a living zombie as prey.
+- A loaded-chunk corpse index and low-frequency accounting instead of per-frame world scans.
+- Temperature-dependent exponential calorie decay stored in corpse mod data.
+- Historical ageing from apocalypse day zero for zombies created in regions discovered later.
+- Local historical reconciliation: an overdue zombie may survive only by debiting calories that actually remain in nearby corpses. Failure produces a corpse with a historical death time.
+- Existing fixed-deadline mode remains unchanged and is still the default.
+
+The persistent aggregate-sector model described below remains a target for later beta work. The current prototype performs a conservative local reconciliation when objects materialize; it does not claim an exact route-by-route simulation while a region is virtualized.
 
 ```text
 Living zombie
