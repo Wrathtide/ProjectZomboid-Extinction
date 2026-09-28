@@ -26,12 +26,16 @@ local function isEligibleTester(player)
     return accessLevel ~= "" and accessLevel ~= "none"
 end
 
+local function isGhostMode(player)
+    local ok, value = pcall(function() return player:isGhostMode() end)
+    return ok and value == true
+end
+
 local function restoreIgnoreState(player)
     local state = Tools.playerState[player]
     if state == nil or state.applied ~= true then return end
-    if state.changedByExtinction == true and player.isZombiesDontAttack ~= nil
-            and player:isZombiesDontAttack() then
-        pcall(function() player:setZombiesDontAttack(false) end)
+    if state.changedByExtinction == true and isGhostMode(player) then
+        pcall(function() player:setGhostMode(false) end)
     end
     Tools.playerState[player] = nil
 end
@@ -42,24 +46,21 @@ local function updateIgnoreState(player)
     local state = Tools.playerState[player]
 
     if enabled then
-        if state ~= nil and state.applied == true then return end
-        local alreadyIgnored = false
-        if player.isZombiesDontAttack ~= nil then
-            pcall(function() alreadyIgnored = player:isZombiesDontAttack() end)
+        if state == nil or state.applied ~= true then
+            local alreadyGhost = isGhostMode(player)
+            Tools.playerState[player] = {
+                applied = true,
+                changedByExtinction = not alreadyGhost,
+            }
         end
-        Tools.playerState[player] = {
-            applied = true,
-            changedByExtinction = not alreadyIgnored,
-        }
-        if not alreadyIgnored then
-            pcall(function() player:setZombiesDontAttack(true) end)
-        end
+        pcall(function() player:setGhostMode(true) end)
     else
         restoreIgnoreState(player)
     end
 end
 
-local function updateAllPlayers()
+local function protectedPlayers()
+    local protected = {}
     local count = 1
     if type(getNumActivePlayers) == "function" then
         local ok, value = pcall(getNumActivePlayers)
@@ -67,7 +68,46 @@ local function updateAllPlayers()
     end
     for playerIndex = 0, count - 1 do
         local player = getSpecificPlayer(playerIndex)
-        if player ~= nil then updateIgnoreState(player) end
+        if player ~= nil then
+            updateIgnoreState(player)
+            if optionEnabled("TestIgnorePlayer") and isEligibleTester(player) then
+                protected[player] = true
+            end
+        end
+    end
+    return protected
+end
+
+local function zombieAggressor(zombie)
+    local ok, attacker = pcall(function() return zombie:getAttackedBy() end)
+    if ok then return attacker end
+    return nil
+end
+
+local function clearZombieAggression(zombie)
+    pcall(function() zombie:setTarget(nil) end)
+    pcall(function() zombie:setAttackedBy(nil) end)
+    pcall(function() zombie:clearAggroList() end)
+    pcall(function() zombie:setTargetSeenTime(0) end)
+end
+
+local function enforceZombieIgnore()
+    local protected = protectedPlayers()
+    if next(protected) == nil then return end
+
+    local cell = getCell()
+    local zombies = cell and cell:getZombieList() or nil
+    if zombies == nil then return end
+
+    for index = 0, zombies:size() - 1 do
+        local zombie = zombies:get(index)
+        if zombie ~= nil then
+            local target = zombie:getTarget()
+            local attacker = zombieAggressor(zombie)
+            if protected[target] == true or protected[attacker] == true then
+                clearZombieAggression(zombie)
+            end
+        end
     end
 end
 
@@ -158,7 +198,7 @@ local function drawBiologicalOverlay()
 end
 
 Events.OnCreatePlayer.Add(onCreatePlayer)
-Events.OnGameStart.Add(updateAllPlayers)
-Events.EveryOneMinute.Add(updateAllPlayers)
+Events.OnGameStart.Add(enforceZombieIgnore)
+Events.OnTick.Add(enforceZombieIgnore)
 Events.OnPostUIDraw.Add(drawBiologicalOverlay)
 if Events.OnGameExit ~= nil then Events.OnGameExit.Add(onGameExit) end
