@@ -4,63 +4,29 @@ local Tools = ExtinctionTestTools
 local OVERLAY_RANGE = 20
 local OVERLAY_RANGE_SQUARED = OVERLAY_RANGE * OVERLAY_RANGE
 
-Tools.playerState = Tools.playerState or setmetatable({}, { __mode = "k" })
+Tools.protectedPlayers = Tools.protectedPlayers or setmetatable({}, { __mode = "k" })
+Tools.pendingZombies = Tools.pendingZombies or setmetatable({}, { __mode = "k" })
+Tools.ignoreStatus = Tools.ignoreStatus or {
+    active = false,
+    logged = false,
+    suppressed = 0,
+}
 
 local function optionEnabled(name)
     local group = SandboxVars and SandboxVars.Extinction
     return group ~= nil and group[name] == true
 end
 
-local function isMultiplayerClient()
-    return type(isClient) == "function" and isClient()
-end
-
-local function isEligibleTester(player)
-    if player == nil then return false end
-    if not isMultiplayerClient() then return true end
-
-    local accessLevel = ""
-    if player.getAccessLevel ~= nil then
-        pcall(function() accessLevel = string.lower(tostring(player:getAccessLevel() or "")) end)
-    end
-    return accessLevel ~= "" and accessLevel ~= "none"
-end
-
-local function isGhostMode(player)
-    local ok, value = pcall(function() return player:isGhostMode() end)
-    return ok and value == true
-end
-
-local function restoreIgnoreState(player)
-    local state = Tools.playerState[player]
-    if state == nil or state.applied ~= true then return end
-    if state.changedByExtinction == true and isGhostMode(player) then
-        pcall(function() player:setGhostMode(false) end)
-    end
-    Tools.playerState[player] = nil
-end
-
-local function updateIgnoreState(player)
-    if player == nil then return end
-    local enabled = optionEnabled("TestIgnorePlayer") and isEligibleTester(player)
-    local state = Tools.playerState[player]
-
-    if enabled then
-        if state == nil or state.applied ~= true then
-            local alreadyGhost = isGhostMode(player)
-            Tools.playerState[player] = {
-                applied = true,
-                changedByExtinction = not alreadyGhost,
-            }
-        end
-        pcall(function() player:setGhostMode(true) end)
-    else
-        restoreIgnoreState(player)
-    end
-end
-
 local function protectedPlayers()
     local protected = {}
+    local hasProtectedPlayer = false
+    if not optionEnabled("TestIgnorePlayer") then
+        Tools.protectedPlayers = protected
+        Tools.ignoreStatus.active = false
+        Tools.ignoreStatus.logged = false
+        return protected, false
+    end
+
     local count = 1
     if type(getNumActivePlayers) == "function" then
         local ok, value = pcall(getNumActivePlayers)
@@ -69,13 +35,24 @@ local function protectedPlayers()
     for playerIndex = 0, count - 1 do
         local player = getSpecificPlayer(playerIndex)
         if player ~= nil then
-            updateIgnoreState(player)
-            if optionEnabled("TestIgnorePlayer") and isEligibleTester(player) then
-                protected[player] = true
-            end
+            protected[player] = true
+            hasProtectedPlayer = true
         end
     end
-    return protected
+
+    Tools.protectedPlayers = protected
+    Tools.ignoreStatus.active = hasProtectedPlayer
+    if hasProtectedPlayer and not Tools.ignoreStatus.logged then
+        print("[Extinction] TestIgnorePlayer ACTIVE: direct zombie target suppression")
+        Tools.ignoreStatus.logged = true
+    end
+    return protected, hasProtectedPlayer
+end
+
+local function isProtectedPlayer(character)
+    if character == nil or not optionEnabled("TestIgnorePlayer") then return false end
+    local protected, _ = protectedPlayers()
+    return protected[character] == true
 end
 
 local function zombieAggressor(zombie)
@@ -89,12 +66,23 @@ local function clearZombieAggression(zombie)
     pcall(function() zombie:setAttackedBy(nil) end)
     pcall(function() zombie:clearAggroList() end)
     pcall(function() zombie:setTargetSeenTime(0) end)
+    pcall(function() zombie:setPath2(nil) end)
+    pcall(function() zombie:Wander() end)
+    Tools.ignoreStatus.suppressed = Tools.ignoreStatus.suppressed + 1
+end
+
+local function clearIfThreateningTester(zombie, protected, force)
+    if zombie == nil then return end
+    local target = zombie:getTarget()
+    local attacker = zombieAggressor(zombie)
+    if force or protected[target] == true or protected[attacker] == true then
+        clearZombieAggression(zombie)
+    end
 end
 
 local function enforceZombieIgnore()
-    local protected = protectedPlayers()
-    if next(protected) == nil then return end
-
+    local protected, hasProtectedPlayer = protectedPlayers()
+    if not hasProtectedPlayer then return end
     local cell = getCell()
     local zombies = cell and cell:getZombieList() or nil
     if zombies == nil then return end
@@ -102,23 +90,64 @@ local function enforceZombieIgnore()
     for index = 0, zombies:size() - 1 do
         local zombie = zombies:get(index)
         if zombie ~= nil then
-            local target = zombie:getTarget()
-            local attacker = zombieAggressor(zombie)
-            if protected[target] == true or protected[attacker] == true then
-                clearZombieAggression(zombie)
-            end
+            local force = Tools.pendingZombies[zombie] == true
+            clearIfThreateningTester(zombie, protected, force)
+            Tools.pendingZombies[zombie] = nil
         end
     end
 end
 
-local function onCreatePlayer(_, player)
-    updateIgnoreState(player)
+local function onZombieUpdate(zombie)
+    if not Tools.ignoreStatus.active or zombie == nil then return end
+    local force = Tools.pendingZombies[zombie] == true
+    clearIfThreateningTester(zombie, Tools.protectedPlayers, force)
+    Tools.pendingZombies[zombie] = nil
+end
+
+local function onHitZombie(zombie, wielder)
+    if zombie == nil or not isProtectedPlayer(wielder) then return end
+    Tools.pendingZombies[zombie] = true
+end
+
+local function onWeaponHitCharacter(attacker, target)
+    if target == nil or not isProtectedPlayer(attacker) then return end
+    if type(instanceof) == "function" and instanceof(target, "IsoZombie") then
+        Tools.pendingZombies[target] = true
+    end
+end
+
+local function drawIgnoreStatus()
+    if not optionEnabled("TestIgnorePlayer") then return end
+    local text
+    local r, g, b
+    if Tools.ignoreStatus.active then
+        text = string.format(
+            "EXTINCTION TEST SHIELD: ACTIVE | aggression cancelled: %d",
+            Tools.ignoreStatus.suppressed
+        )
+        r, g, b = 0.25, 1.0, 0.25
+    else
+        text = "EXTINCTION TEST SHIELD: ERROR - no protected local player"
+        r, g, b = 1.0, 0.2, 0.2
+    end
+    getTextManager():DrawStringCentre(
+        UIFont.Small,
+        getCore():getScreenWidth() / 2,
+        24,
+        text,
+        r,
+        g,
+        b,
+        1.0
+    )
 end
 
 local function onGameExit()
-    for player, _ in pairs(Tools.playerState) do
-        restoreIgnoreState(player)
-    end
+    Tools.protectedPlayers = setmetatable({}, { __mode = "k" })
+    Tools.pendingZombies = setmetatable({}, { __mode = "k" })
+    Tools.ignoreStatus.active = false
+    Tools.ignoreStatus.logged = false
+    Tools.ignoreStatus.suppressed = 0
 end
 
 local function rainSupports(zombie)
@@ -179,7 +208,7 @@ local function drawBiologicalOverlay()
 
     local playerIndex = 0
     local player = getSpecificPlayer(playerIndex)
-    if player == nil or not isEligibleTester(player) then return end
+    if player == nil then return end
     local cell = getCell()
     if cell == nil then return end
     local zombies = cell:getZombieList()
@@ -197,8 +226,12 @@ local function drawBiologicalOverlay()
     end
 end
 
-Events.OnCreatePlayer.Add(onCreatePlayer)
 Events.OnGameStart.Add(enforceZombieIgnore)
 Events.OnTick.Add(enforceZombieIgnore)
+Events.OnPlayerUpdate.Add(enforceZombieIgnore)
+Events.OnZombieUpdate.Add(onZombieUpdate)
+Events.OnHitZombie.Add(onHitZombie)
+Events.OnWeaponHitCharacter.Add(onWeaponHitCharacter)
+Events.OnPostUIDraw.Add(drawIgnoreStatus)
 Events.OnPostUIDraw.Add(drawBiologicalOverlay)
 if Events.OnGameExit ~= nil then Events.OnGameExit.Add(onGameExit) end
