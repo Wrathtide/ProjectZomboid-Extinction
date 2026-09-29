@@ -263,9 +263,10 @@ The beta implementation:
 3. passes the animal through the same native `spotted(...)` detection path used
    for living character targets, establishing the target and pursuit;
 4. triggers the animal's native flee response;
-5. uses the zombie's bite animation, but supplies the missing collision damage
-   through `IsoAnimal.hitConsequences(...)` because Build 42's `AttackState`
-   explicitly clears `IsoAnimal` targets instead of damaging them;
+5. enters the zombie's native `attack` action state without attempting to write
+   the read-only `bAttack` animation variable, then supplies the missing
+   collision damage through `IsoAnimal.hitConsequences(...)` because Build 42's
+   `AttackState` explicitly clears `IsoAnimal` targets instead of damaging them;
 6. lets the animal API apply species resistance, hit reaction, blood, fleeing,
    counterattack, death, synchronization, and corpse creation;
 7. leaves the normal animal corpse for the corpse-resource model.
@@ -273,8 +274,10 @@ The beta implementation:
 Runtime testing must still confirm attack damage, animation alignment, fleeing,
 multiplayer authority, and corpse creation for every supported animal size.
 The damage bridge is server-authoritative and calls the animal's own
-`hitConsequences`, `Kill`, `DoDeath`, and `die` APIs rather than editing animal
-health or spawning a substitute corpse directly.
+`hitConsequences`, `Kill`, `DoDeath`, and `die` APIs. If the native reaction
+path returns without changing health, Extinction applies the same
+`AnimalData.getHealthLoss(...)` species multiplier as a controlled fallback;
+it never spawns a substitute corpse.
 
 ## Consumed remains and loot
 

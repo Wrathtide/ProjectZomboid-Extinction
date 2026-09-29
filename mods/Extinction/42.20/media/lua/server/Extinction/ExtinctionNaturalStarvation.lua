@@ -17,6 +17,7 @@ local FOOD_SEARCH_RADIUS = 10
 local ANIMAL_SEARCH_RADIUS = 16
 local ANIMAL_ATTACK_INTERVAL_MS = 1800
 local ANIMAL_ATTACK_WINDUP_MS = 450
+local ANIMAL_ATTACK_HIT_GRACE = 0.75
 -- This value is passed through the animal's native species resistance.
 -- Adult livestock keeps only 1% of it, while small animals keep 10-20%.
 local ANIMAL_BITE_DAMAGE = 2.5
@@ -742,12 +743,13 @@ local function animalAttackPathIsClear(zombie, animal)
     return not blocked
 end
 
-local function animalIsInBiteRange(zombie, animal)
+local function animalIsInBiteRange(zombie, animal, extraRange)
     if not animalIsAlive(animal) then return false end
     if math.abs(zombie:getZ() - animal:getZ()) >= 0.2 then return false end
     local dx = animal:getX() - zombie:getX()
     local dy = animal:getY() - zombie:getY()
     local range = animalAttackRange(zombie, animal)
+        + math.max(0, tonumber(extraRange) or 0)
     return dx * dx + dy * dy <= range * range
         and animalAttackPathIsClear(zombie, animal)
 end
@@ -765,11 +767,19 @@ end
 local function beginAnimalBite(zombie, animal, nowMs)
     pcall(function() zombie:faceThisObject(animal) end)
     pcall(function() zombie:setTarget(animal) end)
-    pcall(function() zombie:setVariable("bAttack", true) end)
     pcall(function() zombie:setVariable("AttackType", "bite") end)
+    pcall(function() zombie:setAttackOutcome("start") end)
     if AttackState ~= nil and AttackState.instance ~= nil then
         pcall(function() zombie:changeState(AttackState.instance()) end)
     end
+    pcall(function()
+        local context = zombie:getActionContext()
+        local group = context and context:getGroup() or nil
+        local attackState = group and group:findState("attack") or nil
+        if context ~= nil and attackState ~= nil then
+            context:setCurrentState(attackState)
+        end
+    end)
     NS.pendingAnimalBites[zombie] = {
         animal = animal,
         hitAt = nowMs + ANIMAL_ATTACK_WINDUP_MS,
@@ -780,16 +790,50 @@ end
 local function finishAnimalBite(zombie, pending)
     local animal = pending and pending.animal or nil
     NS.pendingAnimalBites[zombie] = nil
-    if not animalIsInBiteRange(zombie, animal) then return end
+    if not animalIsInBiteRange(zombie, animal, ANIMAL_ATTACK_HIT_GRACE) then return end
     if zombie.isNoTeeth ~= nil and zombie:isNoTeeth() then return end
 
-    local hit = false
+    local healthBefore = nil
+    pcall(function() healthBefore = tonumber(animal:getHealth()) end)
+    if healthBefore == nil or healthBefore <= 0 then return end
+
+    local hit, hitError = false, nil
     if animal.hitConsequences ~= nil then
-        hit = pcall(function()
+        hit, hitError = pcall(function()
             animal:hitConsequences(nil, zombie, false, ANIMAL_BITE_DAMAGE, false)
         end)
     end
-    if not hit or animal.getHealth == nil or animal:getHealth() > 0 then return end
+    if not hit then
+        print("[Extinction] Animal bite hitConsequences failed: " .. tostring(hitError))
+        return
+    end
+
+    local healthAfter = healthBefore
+    pcall(function() healthAfter = tonumber(animal:getHealth()) or healthBefore end)
+    if healthAfter >= healthBefore then
+        local invincible = false
+        if animal.isInvincible ~= nil then
+            pcall(function() invincible = animal:isInvincible() end)
+        end
+        if not invincible then
+            local speciesLoss = 0.025
+            pcall(function()
+                local animalData = animal:getData()
+                if animalData ~= nil and animalData.getHealthLoss ~= nil then
+                    speciesLoss = tonumber(animalData:getHealthLoss(0.025)) or speciesLoss
+                end
+            end)
+            pcall(function()
+                animal:setHealth(math.max(0, healthBefore
+                    - ANIMAL_BITE_DAMAGE * speciesLoss))
+                if animal.sendExtraUpdateToClients ~= nil then
+                    animal:sendExtraUpdateToClients()
+                end
+                healthAfter = tonumber(animal:getHealth()) or healthAfter
+            end)
+        end
+    end
+    if healthAfter > 0 then return end
 
     pcall(function() animal:Kill(zombie) end)
     pcall(function() animal:DoDeath(nil, zombie) end)
