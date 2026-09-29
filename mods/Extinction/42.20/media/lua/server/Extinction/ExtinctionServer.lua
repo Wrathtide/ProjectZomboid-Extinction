@@ -11,6 +11,7 @@ local MAX_PENDING_PER_TICK = 128
 
 QE.pendingZombies = QE.pendingZombies or {}
 QE.trackedBodies = QE.trackedBodies or {}
+QE.animalSkeletonBodies = QE.animalSkeletonBodies or {}
 QE.tickNumber = QE.tickNumber or 0
 QE.lastFullScanTick = QE.lastFullScanTick or 0
 
@@ -100,12 +101,39 @@ local function sendNewCorpse(body)
     end
 end
 
+local function preserveAnimalSkeleton(body)
+    if body == nil or belongsToProjectALife(body) then return end
+    local data = safeModData(body)
+    if data ~= nil and data.ExtinctionOriginalDeathTime == nil
+            and body.getDeathTime ~= nil then
+        local ok, deathTime = pcall(function() return body:getDeathTime() end)
+        if ok then data.ExtinctionOriginalDeathTime = tonumber(deathTime) end
+    end
+
+    -- Build 42 continues advancing animal rot stages even after the skeleton
+    -- marker is set, and removes the body after stage 4. Keeping the native
+    -- body's age close to zero prevents that removal while stage 2 remains.
+    pcall(function() body:setDeathTime(worldAgeHours()) end)
+    QE.animalSkeletonBodies[body] = true
+end
+
 local function trackBody(body)
     if body == nil or type(instanceof) ~= "function" or not instanceof(body, "IsoDeadBody") then
         return
     end
     if QE.NaturalStarvation ~= nil then QE.NaturalStarvation.trackBody(body) end
-    if body.isAnimal ~= nil and body:isAnimal() then return end
+    if body.isAnimal ~= nil and body:isAnimal() then
+        local skeleton = false
+        if body.isAnimalSkeleton ~= nil then
+            pcall(function() skeleton = body:isAnimalSkeleton() end)
+        end
+        if skeleton then
+            preserveAnimalSkeleton(body)
+        elseif not belongsToProjectALife(body) then
+            QE.trackedBodies[body] = true
+        end
+        return
+    end
     if body.isPlayer ~= nil and body:isPlayer() then return end
     if belongsToProjectALife(body) then return end
     if body.isZombie ~= nil and not body:isZombie() then return end
@@ -294,8 +322,41 @@ local function transferPreservedLoot(body, skeleton, square)
     pcall(function() target:requestSync() end)
 end
 
+local function createAnimalSkeletonFromBody(body)
+    if body == nil or belongsToProjectALife(body) then return nil end
+    local square = body:getSquare()
+    if square == nil then return nil end
+
+    local alreadySkeleton = false
+    if body.isAnimalSkeleton ~= nil then
+        pcall(function() alreadySkeleton = body:isAnimalSkeleton() end)
+    end
+    if alreadySkeleton then return body end
+
+    local data = safeModData(body)
+    if data == nil then return nil end
+    data.skeleton = "true"
+    data.parts = nil
+    data.ExtinctionCorpseResource = 0
+    data.ExtinctionManagedCorpse = true
+    data.ExtinctionSkeletonized = true
+
+    local currentStage = tonumber(data.animalRotStage) or 0
+    pcall(function() body:changeRotStage(2 - currentStage) end)
+    pcall(function() body:invalidateCorpse() end)
+    preserveAnimalSkeleton(body)
+
+    QE.trackedBodies[body] = nil
+    if QE.NaturalStarvation ~= nil then QE.NaturalStarvation.untrackBody(body) end
+    transmitModData(body)
+    return body
+end
+
 local function createSkeletonFromBody(body)
     if body == nil or belongsToProjectALife(body) then return nil end
+    if body.isAnimal ~= nil and body:isAnimal() then
+        return createAnimalSkeletonFromBody(body)
+    end
     local square = body:getSquare()
     if square == nil then return nil end
 
@@ -345,11 +406,31 @@ local function processTrackedBodies()
         else
             local skeleton = false
             pcall(function() skeleton = body:isSkeleton() end)
+            if not skeleton and body.isAnimalSkeleton ~= nil then
+                pcall(function() skeleton = body:isAnimalSkeleton() end)
+            end
             if not skeleton and now >= bodyDeathAgeHours(body) + delay then
                 createSkeletonFromBody(body)
             end
         end
         if remove then QE.trackedBodies[body] = nil end
+    end
+end
+
+local function preserveAnimalSkeletonBodies()
+    for body, _ in pairs(QE.animalSkeletonBodies) do
+        local present = false
+        local skeleton = false
+        local ok = pcall(function()
+            present = body:getSquare() ~= nil
+            skeleton = present and body.isAnimalSkeleton ~= nil
+                and body:isAnimalSkeleton()
+        end)
+        if not ok or not present or not skeleton or belongsToProjectALife(body) then
+            QE.animalSkeletonBodies[body] = nil
+        else
+            pcall(function() body:setDeathTime(worldAgeHours()) end)
+        end
     end
 end
 
@@ -401,7 +482,9 @@ QE.NaturalStarvation.configure({
 
 Events.OnZombieCreate.Add(queueZombie)
 Events.OnTick.Add(onTick)
+Events.OnTick.Add(QE.NaturalStarvation.processAnimalAttacks)
 Events.EveryOneMinute.Add(scanAllActiveZombies)
+Events.EveryOneMinute.Add(preserveAnimalSkeletonBodies)
 Events.EveryTenMinutes.Add(QE.NaturalStarvation.processBodies)
 Events.EveryHours.Add(processTrackedBodies)
 Events.LoadGridsquare.Add(scanSquareForBodies)

@@ -15,6 +15,11 @@ local CONSUMPTION_RESOURCE_PER_HOUR = 0.36
 local HUMAN_CORPSE_RESOURCE = 12.8
 local FOOD_SEARCH_RADIUS = 10
 local ANIMAL_SEARCH_RADIUS = 16
+local ANIMAL_ATTACK_INTERVAL_MS = 1800
+local ANIMAL_ATTACK_WINDUP_MS = 450
+-- This value is passed through the animal's native species resistance.
+-- Adult livestock keeps only 1% of it, while small animals keep 10-20%.
+local ANIMAL_BITE_DAMAGE = 2.5
 local FOOD_SEARCH_INTERVAL_HOURS = 1
 local HISTORICAL_RAIN_SUPPORT_PER_DAY = 0.20
 local SECTOR_SIZE = 50
@@ -95,6 +100,10 @@ NS.bodyChunks = NS.bodyChunks or {}
 NS.bodyChunkKeys = NS.bodyChunkKeys or weakKeyTable()
 NS.nextFoodSearch = NS.nextFoodSearch or weakKeyTable()
 NS.feedingBodies = NS.feedingBodies or weakKeyTable()
+NS.animalTargets = NS.animalTargets or weakKeyTable()
+NS.nextAnimalAttackMs = NS.nextAnimalAttackMs or weakKeyTable()
+NS.pendingAnimalBites = NS.pendingAnimalBites or weakKeyTable()
+NS.animalAttackModeActive = NS.animalAttackModeActive == true
 NS.lastReserveTransmit = NS.lastReserveTransmit or weakKeyTable()
 NS.context = NS.context or nil
 NS.sectorRoot = NS.sectorRoot or nil
@@ -495,8 +504,7 @@ local function takeResourceFromBody(body, requested, currentHour)
     if bodyData.ExtinctionCorpseResource <= 0.01 then
         bodyData.ExtinctionCorpseResource = 0
         detachEaters(body)
-        if not bodyIsAnimal(body)
-                and NS.context.createSkeletonFromBody ~= nil then
+        if NS.context.createSkeletonFromBody ~= nil then
             NS.context.createSkeletonFromBody(body)
         end
     end
@@ -677,6 +685,7 @@ end
 
 local function targetAnimal(zombie, animal)
     if zombie == nil or animal == nil then return end
+    NS.animalTargets[zombie] = animal
     local spotted = false
     if zombie.spotted ~= nil then
         spotted = pcall(function() zombie:spotted(animal, true) end)
@@ -690,6 +699,140 @@ local function targetAnimal(zombie, animal)
         local ok, behavior = pcall(function() return animal:getBehavior() end)
         if ok and behavior ~= nil and behavior.forceFleeFromChr ~= nil then
             pcall(function() behavior:forceFleeFromChr(zombie) end)
+        end
+    end
+end
+
+local function clearAnimalTarget(zombie)
+    NS.animalTargets[zombie] = nil
+    NS.nextAnimalAttackMs[zombie] = nil
+    NS.pendingAnimalBites[zombie] = nil
+end
+
+local function animalIsAlive(animal)
+    if animal == nil then return false end
+    local alive = false
+    local ok = pcall(function()
+        alive = animal:getSquare() ~= nil
+            and (animal.isDead == nil or not animal:isDead())
+            and (animal.getHealth == nil or animal:getHealth() > 0)
+    end)
+    return ok and alive
+end
+
+local function animalAttackRange(zombie, animal)
+    local zombieWidth = 0.30
+    local animalWidth = 0.30
+    if zombie.getWidth ~= nil then
+        pcall(function() zombieWidth = tonumber(zombie:getWidth()) or zombieWidth end)
+    end
+    if animal.getWidth ~= nil then
+        pcall(function() animalWidth = tonumber(animal:getWidth()) or animalWidth end)
+    end
+    return clamp(0.55 + zombieWidth + animalWidth, 0.90, 1.60)
+end
+
+local function animalAttackPathIsClear(zombie, animal)
+    local zombieSquare = zombie:getSquare()
+    local animalSquare = animal:getSquare()
+    if zombieSquare == nil or animalSquare == nil then return false end
+    if zombieSquare.isSomethingTo == nil then return true end
+    local blocked = false
+    pcall(function() blocked = zombieSquare:isSomethingTo(animalSquare) end)
+    return not blocked
+end
+
+local function animalIsInBiteRange(zombie, animal)
+    if not animalIsAlive(animal) then return false end
+    if math.abs(zombie:getZ() - animal:getZ()) >= 0.2 then return false end
+    local dx = animal:getX() - zombie:getX()
+    local dy = animal:getY() - zombie:getY()
+    local range = animalAttackRange(zombie, animal)
+    return dx * dx + dy * dy <= range * range
+        and animalAttackPathIsClear(zombie, animal)
+end
+
+local function refreshAnimalPursuit(zombie, animal)
+    if zombie:getTarget() ~= animal then
+        pcall(function() zombie:setTarget(animal) end)
+    end
+    pcall(function() zombie:setTargetSeenTime(10) end)
+    if not animalIsInBiteRange(zombie, animal) then
+        pcall(function() zombie:pathToCharacter(animal) end)
+    end
+end
+
+local function beginAnimalBite(zombie, animal, nowMs)
+    pcall(function() zombie:faceThisObject(animal) end)
+    pcall(function() zombie:setTarget(animal) end)
+    pcall(function() zombie:setVariable("bAttack", true) end)
+    pcall(function() zombie:setVariable("AttackType", "bite") end)
+    if AttackState ~= nil and AttackState.instance ~= nil then
+        pcall(function() zombie:changeState(AttackState.instance()) end)
+    end
+    NS.pendingAnimalBites[zombie] = {
+        animal = animal,
+        hitAt = nowMs + ANIMAL_ATTACK_WINDUP_MS,
+    }
+    NS.nextAnimalAttackMs[zombie] = nowMs + ANIMAL_ATTACK_INTERVAL_MS
+end
+
+local function finishAnimalBite(zombie, pending)
+    local animal = pending and pending.animal or nil
+    NS.pendingAnimalBites[zombie] = nil
+    if not animalIsInBiteRange(zombie, animal) then return end
+    if zombie.isNoTeeth ~= nil and zombie:isNoTeeth() then return end
+
+    local hit = false
+    if animal.hitConsequences ~= nil then
+        hit = pcall(function()
+            animal:hitConsequences(nil, zombie, false, ANIMAL_BITE_DAMAGE, false)
+        end)
+    end
+    if not hit or animal.getHealth == nil or animal:getHealth() > 0 then return end
+
+    pcall(function() animal:Kill(zombie) end)
+    pcall(function() animal:DoDeath(nil, zombie) end)
+    pcall(function() animal:die() end)
+    pcall(function() zombie:setTarget(nil) end)
+    clearAnimalTarget(zombie)
+    NS.nextFoodSearch[zombie] = 0
+end
+
+function NS.processAnimalAttacks()
+    if not naturalModeEnabled() or not animalHuntingEnabled() then
+        if NS.animalAttackModeActive then
+            NS.animalTargets = weakKeyTable()
+            NS.nextAnimalAttackMs = weakKeyTable()
+            NS.pendingAnimalBites = weakKeyTable()
+            NS.animalAttackModeActive = false
+        end
+        return
+    end
+    NS.animalAttackModeActive = true
+
+    local nowMs = getTimestampMs()
+    for zombie, animal in pairs(NS.animalTargets) do
+        local zombieAlive = zombie ~= nil and zombie:getSquare() ~= nil
+            and (zombie.isDead == nil or not zombie:isDead())
+        local currentTarget = zombieAlive and zombie:getTarget() or nil
+        local eatingTarget = zombieAlive and zombie.getEatBodyTarget ~= nil
+            and zombie:getEatBodyTarget() or nil
+        if not zombieAlive or not animalIsAlive(animal)
+                or eatingTarget ~= nil
+                or (currentTarget ~= nil and currentTarget ~= animal) then
+            clearAnimalTarget(zombie)
+        else
+            local pending = NS.pendingAnimalBites[zombie]
+            if pending ~= nil then
+                if nowMs >= pending.hitAt then finishAnimalBite(zombie, pending) end
+            else
+                refreshAnimalPursuit(zombie, animal)
+                local nextAttack = tonumber(NS.nextAnimalAttackMs[zombie]) or 0
+                if nowMs >= nextAttack and animalIsInBiteRange(zombie, animal) then
+                    beginAnimalBite(zombie, animal, nowMs)
+                end
+            end
         end
     end
 end
@@ -725,14 +868,22 @@ local function continueAssignedFeeding(zombie, currentHour)
 end
 
 local function chooseFoodIfHungry(zombie, data, currentHour)
-    if continueAssignedFeeding(zombie, currentHour) then return end
+    if continueAssignedFeeding(zombie, currentHour) then
+        clearAnimalTarget(zombie)
+        return
+    end
 
     local reserve = tonumber(data.ExtinctionBiologicalReserve) or 0
-    if reserve > HUNGER_RESERVE_DAYS then return end
+    if reserve > HUNGER_RESERVE_DAYS then
+        clearAnimalTarget(zombie)
+        return
+    end
     if zombie.getTarget ~= nil and zombie:getTarget() ~= nil then
         local target = zombie:getTarget()
         if type(instanceof) == "function" and instanceof(target, "IsoAnimal") then
             targetAnimal(zombie, target)
+        else
+            clearAnimalTarget(zombie)
         end
         return
     end
@@ -745,6 +896,7 @@ local function chooseFoodIfHungry(zombie, data, currentHour)
 
     local body = nearestEdibleBody(zombie, currentHour)
     if body ~= nil then
+        clearAnimalTarget(zombie)
         NS.feedingBodies[zombie] = body
         pcall(function() zombie:setBodyToEat(body) end)
         local dx = body:getX() - zombie:getX()
@@ -935,8 +1087,7 @@ function NS.processBodies()
                 if data.ExtinctionCorpseResource <= 0.01 then
                     data.ExtinctionCorpseResource = 0
                     detachEaters(body)
-                    if not bodyIsAnimal(body)
-                            and NS.context.createSkeletonFromBody ~= nil then
+                    if NS.context.createSkeletonFromBody ~= nil then
                         NS.context.createSkeletonFromBody(body)
                     end
                 end

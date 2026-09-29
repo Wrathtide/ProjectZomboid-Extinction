@@ -261,21 +261,26 @@ The beta implementation:
    usable corpse;
 2. keeps the animal search bounded;
 3. passes the animal through the same native `spotted(...)` detection path used
-   for living character targets, establishing the target, pursuit, and ordinary
-   close-range attack behaviour;
+   for living character targets, establishing the target and pursuit;
 4. triggers the animal's native flee response;
-5. relies on the inherited native attack path because `IsoAnimal` is an
-   `IsoPlayer` subclass;
-6. leaves the normal animal corpse for the corpse-resource model.
+5. uses the zombie's bite animation, but supplies the missing collision damage
+   through `IsoAnimal.hitConsequences(...)` because Build 42's `AttackState`
+   explicitly clears `IsoAnimal` targets instead of damaging them;
+6. lets the animal API apply species resistance, hit reaction, blood, fleeing,
+   counterattack, death, synchronization, and corpse creation;
+7. leaves the normal animal corpse for the corpse-resource model.
 
 Runtime testing must still confirm attack damage, animation alignment, fleeing,
 multiplayer authority, and corpse creation for every supported animal size.
-The mod does not synthesize unverified damage while these tests are pending.
+The damage bridge is server-authoritative and calls the animal's own
+`hitConsequences`, `Kill`, `DoDeath`, and `die` APIs rather than editing animal
+health or spawning a substitute corpse directly.
 
 ## Consumed remains and loot
 
-When a human or zombie corpse reaches zero resource, it may be converted to a
-native lightweight skeleton before the ordinary age deadline.
+When a human, zombie, or animal corpse reaches zero resource, it is converted
+through the corresponding native skeleton path before the ordinary age
+deadline.
 
 During conversion:
 
@@ -289,10 +294,14 @@ During conversion:
 
 Unknown item categories are preserved by default.
 
-Animal corpses use a native animal skeleton only where the game supports it.
-Otherwise the zero-resource animal corpse remains available to the game's
-ordinary rot/removal systems rather than being replaced by an incorrect human
-skeleton.
+Animal corpses use the game's native animal rot-stage skeleton path. Extinction
+sets the same `skeleton` and `parts` corpse data used by vanilla
+`ButcheringUtil`, advances the corpse with `changeRotStage(...)`, and never
+substitutes an incorrect human skeleton. This applies both after the configured
+age and immediately after the animal corpse resource is exhausted. Build 42
+otherwise continues advancing animal rot stages and removes the body after its
+final stage, so Extinction preserves the original death time in mod data while
+refreshing the native body's internal rot clock after skeletonization.
 
 ## Loaded and unloaded simulation
 
@@ -437,9 +446,9 @@ Dense-city profiling remains required before release.
 | Human/zombie corpse feeding | Implemented; runtime test required | Eligible `IsoDeadBody` objects are indexed by chunk. |
 | Animal corpse feeding | Implemented; runtime test required | Animal type and size APIs are present. |
 | Current rain support | Implemented; runtime test required | Climate, snow, temperature, and outdoor APIs are present. |
-| Living animal pursuit | Implemented target path; runtime gate | Full native attack sequence must be observed in game. |
+| Living animal pursuit and bites | Implemented hybrid native path; runtime gate | Native pursuit and animation are paired with `IsoAnimal.hitConsequences` because `AttackState` rejects animal collision damage. |
 | Human skeleton conversion | Verified and implemented | Uses native `createCorpse(true)`. |
-| Animal skeletons | Species-dependent | Incorrect human skeleton fallback is prohibited. |
+| Animal skeletons | Verified native pattern and implemented; runtime visuals required | Mirrors vanilla `ButcheringUtil` mod data and `changeRotStage`, then prevents the engine's final animal-rot stage from deleting the skeleton; no human skeleton fallback. |
 | Preserve hard loot | Implemented; multiplayer test required | Uses native item containers and ground-item fallback. |
 | Historical start age | Implemented as an approximation | New objects use full apocalypse age. |
 | Exact individual off-screen routes | Not feasible in pure Lua | Engine virtualization requires aggregate sectors. |
@@ -465,10 +474,10 @@ Dense-city profiling remains required before release.
 
 - [ ] Every vanilla animal corpse receives a sane resource amount.
 - [ ] Pathing and attack animation work for each animal size.
-- [ ] Native attack damage reaches animals correctly.
+- [ ] Bite damage reaches each animal through its native species resistance.
 - [ ] Animals flee and die through normal systems.
 - [ ] Multiplayer creates exactly one authoritative corpse.
-- [ ] Unsupported animal skeletons fall back safely.
+- [ ] Consumed and age-expired animal corpses enter their native skeleton stage.
 
 ### Remains and loot
 

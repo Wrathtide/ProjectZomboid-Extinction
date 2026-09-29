@@ -174,6 +174,7 @@ The entire probability distribution scales automatically to the selected value.
 - `0` disables automatic skeletonization.
 
 This delay is calculated separately from each corpse's real or historical death date.
+Animal corpses use their native animal skeleton models, and Extinction keeps those skeletons from being deleted by Build 42's final animal-rot stage.
 
 ## Installation
 
@@ -188,7 +189,7 @@ Enable **Extinction** when creating a new world. When using Project A-Life, enab
 ## Version and validation
 
 - Target game version: **Project Zomboid Build 42.20+**.
-- Mod version: **1.1.0-beta.7**.
+- Mod version: **1.1.0-beta.8**.
 - Lua syntax is checked with the Kahlua parser shipped with the local game installation.
 - Events and Java methods are verified directly against the local `projectzomboid.jar`.
 - Sandbox-option and translation files are validated statically.

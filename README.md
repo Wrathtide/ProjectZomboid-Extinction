@@ -168,7 +168,7 @@ Enabling the mod adds an **Extinction** page to the sandbox settings.
 - Rain, temperature, activity, corpse feeding, and reserve-dependent systemic failure affect survival.
 - Hungry zombies may use existing, non-skeletal human, zombie, or animal corpses.
 - Once feeding begins, the assigned corpse is remembered and feeding resumes after the native eating timer or a temporary interruption until no resource remains.
-- A fully consumed human or zombie corpse is converted into a native skeleton.
+- A fully consumed human, zombie, or animal corpse is converted through the matching native skeleton path. Extinction also prevents Build 42's later animal-rot stage from deleting native animal skeletons.
 - Zombies never attack living zombies to obtain food.
 - Resources removed from a corpse are shared and cannot be consumed twice.
 - Digestion, metabolism, and decomposition permanently remove resources from the system.
@@ -180,7 +180,7 @@ Enabling the mod adds an **Extinction** page to the sandbox settings.
 - Default: `On`
 - Used only by Natural Extinction.
 - A hungry zombie that found no corpse may target a nearby living animal.
-- The zombie enters the game's native `spotted(...)` detection path, which supplies targeting, pathing, close-range attack, flee, death, and corpse behaviour.
+- The zombie enters the game's native `spotted(...)` detection path for targeting and pursuit. Because Build 42 explicitly rejects `IsoAnimal` during the normal zombie hit event, Extinction completes close-range bites through the animal's native damage, reaction, death, and corpse APIs.
 - Full animal animation and multiplayer validation remains a required in-game test.
 
 ### Testing overlays
@@ -221,7 +221,7 @@ Enable **Extinction** when creating a new world. When using Project A-Life, enab
 ## Version and validation
 
 - Target game version: **Project Zomboid Build 42.20+**.
-- Mod version: **1.1.0-beta.7**.
+- Mod version: **1.1.0-beta.8**.
 - Lua syntax is checked with the Kahlua parser shipped with the local game installation.
 - Events and Java methods are verified directly against the local `projectzomboid.jar`.
 - Sandbox-option and translation files are validated statically.
