@@ -16,7 +16,7 @@ is capped at 21 days even after feeding or rain.
 
 Two disabled-by-default testing checkboxes display either a compact
 biological-state label over nearby zombies or the remaining raw and usable
-nutritional value over nearby corpses.
+nutritional value and skeletonization countdown over nearby corpses.
 
 ## Inspiration
 
@@ -188,7 +188,7 @@ Enable **Extinction** when creating a new world. When using Project A-Life, enab
 ## Version and validation
 
 - Target game version: **Project Zomboid Build 42.20+**.
-- Mod version: **1.1.0-beta.6**.
+- Mod version: **1.1.0-beta.7**.
 - Lua syntax is checked with the Kahlua parser shipped with the local game installation.
 - Events and Java methods are verified directly against the local `projectzomboid.jar`.
 - Sandbox-option and translation files are validated statically.

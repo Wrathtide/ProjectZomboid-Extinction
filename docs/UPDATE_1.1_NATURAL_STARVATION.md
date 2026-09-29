@@ -395,7 +395,9 @@ Human corpse | raw 12.80d | usable 8.96d
 
 `raw` is the remaining gross corpse resource. `usable` is the part that can
 still become zombie reserve after the 70% digestion efficiency is applied.
-Pending and depleted corpses are visually distinguished.
+Pending and depleted corpses are visually distinguished. A second line shows
+the time remaining until age-based skeletonization, reports when
+skeletonization is disabled, or marks a depleted body for immediate conversion.
 
 The overlay:
 

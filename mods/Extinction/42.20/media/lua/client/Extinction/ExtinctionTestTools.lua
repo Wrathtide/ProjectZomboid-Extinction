@@ -5,6 +5,9 @@ local OVERLAY_RANGE = 20
 local OVERLAY_RANGE_SQUARED = OVERLAY_RANGE * OVERLAY_RANGE
 local CORPSE_SCAN_INTERVAL_TICKS = 60
 local ASSIMILATION_EFFICIENCY = 0.70
+local HOURS_PER_DAY = 24
+local DAYS_PER_MONTH = 30
+local DEFAULT_SKELETONIZATION_DAYS = 180
 
 Tools.trackedBodies = Tools.trackedBodies
     or setmetatable({}, { __mode = "k" })
@@ -13,6 +16,59 @@ Tools.corpseScanTicks = Tools.corpseScanTicks or 0
 local function optionEnabled(name)
     local group = SandboxVars and SandboxVars.Extinction
     return group ~= nil and group[name] == true
+end
+
+local function optionNumber(name, fallback)
+    local group = SandboxVars and SandboxVars.Extinction
+    local value = group and tonumber(group[name]) or nil
+    if value == nil then return fallback end
+    return math.max(0, value)
+end
+
+local function apocalypseOffsetHours()
+    local timeSinceApo = SandboxVars and tonumber(SandboxVars.TimeSinceApo) or 1
+    return math.max(0, (timeSinceApo or 1) - 1)
+        * DAYS_PER_MONTH * HOURS_PER_DAY
+end
+
+local function apocalypseAgeHours()
+    local gameTime = getGameTime()
+    local worldAge = gameTime and tonumber(gameTime:getWorldAgeHours()) or 0
+    return worldAge + apocalypseOffsetHours()
+end
+
+local function bodyDeathAgeHours(body)
+    local data = body and body:getModData() or nil
+    local marked = data and tonumber(data.ExtinctionDeathAgeHours) or nil
+    if marked ~= nil then return marked end
+    local deathTime = nil
+    if body ~= nil and body.getDeathTime ~= nil then
+        pcall(function() deathTime = tonumber(body:getDeathTime()) end)
+    end
+    if deathTime ~= nil and deathTime ~= -1 then
+        return deathTime + apocalypseOffsetHours()
+    end
+    return apocalypseAgeHours()
+end
+
+local function skeletonizationStatus(body, resource)
+    if resource ~= nil and resource <= 0.01 then return "skeleton now" end
+    local delayDays = optionNumber(
+        "SkeletonizationDays",
+        DEFAULT_SKELETONIZATION_DAYS
+    )
+    if delayDays <= 0 then return "skeleton disabled" end
+    local remaining = bodyDeathAgeHours(body)
+        + delayDays * HOURS_PER_DAY
+        - apocalypseAgeHours()
+    if remaining <= 0 then return "skeleton now" end
+    local totalHours = math.ceil(remaining)
+    local days = math.floor(totalHours / HOURS_PER_DAY)
+    local hours = totalHours % HOURS_PER_DAY
+    if days > 0 then
+        return string.format("skeleton in %dd %dh", days, hours)
+    end
+    return string.format("skeleton in %dh", hours)
 end
 
 local function bodyIsPresent(body)
@@ -192,9 +248,12 @@ local function drawCorpseLabel(playerIndex, player, body, resource)
         )
     end
 
+    local skeletonText = skeletonizationStatus(body, resource)
     local manager = getTextManager()
     manager:DrawStringCentre(UIFont.Small, screenX + 1, screenY + 1, text, 0, 0, 0, 0.90)
     manager:DrawStringCentre(UIFont.Small, screenX, screenY, text, r, g, b, 1.0)
+    manager:DrawStringCentre(UIFont.Small, screenX + 1, screenY + 13, skeletonText, 0, 0, 0, 0.90)
+    manager:DrawStringCentre(UIFont.Small, screenX, screenY + 12, skeletonText, 0.65, 0.85, 1.0, 1.0)
 end
 
 local function drawCorpseNutritionOverlay()

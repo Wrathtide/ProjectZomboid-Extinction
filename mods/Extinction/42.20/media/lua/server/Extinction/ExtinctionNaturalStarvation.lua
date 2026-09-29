@@ -495,6 +495,10 @@ local function takeResourceFromBody(body, requested, currentHour)
     if bodyData.ExtinctionCorpseResource <= 0.01 then
         bodyData.ExtinctionCorpseResource = 0
         detachEaters(body)
+        if not bodyIsAnimal(body)
+                and NS.context.createSkeletonFromBody ~= nil then
+            NS.context.createSkeletonFromBody(body)
+        end
     end
     return consumed
 end
