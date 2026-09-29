@@ -4,6 +4,7 @@ local NATURAL_OPTION = "Extinction.NaturalStarvation"
 local DEADLINE_OPTION = "Extinction.ExtinctionDays"
 local HUNT_ANIMALS_OPTION = "Extinction.HuntAnimals"
 local BIOLOGICAL_STATE_OPTION = "Extinction.TestShowBiologicalState"
+local CORPSE_NUTRITION_OPTION = "Extinction.TestShowCorpseNutrition"
 
 local function setTickBoxEnabled(control, enabled)
     if control == nil then return end
@@ -29,6 +30,7 @@ local function updateExtinctionControls(screen)
 
     setTickBoxEnabled(screen.controls[HUNT_ANIMALS_OPTION], naturalEnabled)
     setTickBoxEnabled(screen.controls[BIOLOGICAL_STATE_OPTION], naturalEnabled)
+    setTickBoxEnabled(screen.controls[CORPSE_NUTRITION_OPTION], naturalEnabled)
 end
 
 local originalOnTickBoxSelected = SandboxOptionsScreen.onTickBoxSelected

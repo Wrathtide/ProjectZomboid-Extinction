@@ -9,5 +9,7 @@
     "Sandbox_Extinction.SkeletonizationDays": "Dni od śmierci do szkieletyzacji",
     "Sandbox_Extinction.SkeletonizationDays_tooltip": "Po tylu dniach od śmierci ciało zwykłego zombie zostaje zastąpione lekkim, nierozpoznawalnym szkieletem. Twarde przedmioty, które można zachować, są przenoszone do szczątków. Nadal obowiązują standardowe ustawienia usuwania zwłok. Wartość 0 wyłącza automatyczną szkieletyzację.",
     "Sandbox_Extinction.TestShowBiologicalState": "Testy: Pokaż stan biologiczny zombie",
-    "Sandbox_Extinction.TestShowBiologicalState_tooltip": "Narzędzie testowe, domyślnie wyłączone. Nad pobliskimi aktywnymi zombie pokazuje rezerwę, orientacyjny czas przeżycia oraz aktualny stan biologiczny."
+    "Sandbox_Extinction.TestShowBiologicalState_tooltip": "Narzędzie testowe, domyślnie wyłączone. Nad pobliskimi aktywnymi zombie pokazuje rezerwę, orientacyjny czas przeżycia oraz aktualny stan biologiczny.",
+    "Sandbox_Extinction.TestShowCorpseNutrition": "Testy: Pokaż wartość odżywczą zwłok",
+    "Sandbox_Extinction.TestShowCorpseNutrition_tooltip": "Narzędzie testowe, domyślnie wyłączone. Nad pobliskimi zwłokami pokazuje pozostały surowy zasób oraz liczbę dni rezerwy możliwą do przyswojenia przez zombie."
 }

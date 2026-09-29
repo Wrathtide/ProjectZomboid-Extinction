@@ -94,6 +94,7 @@ end
 NS.bodyChunks = NS.bodyChunks or {}
 NS.bodyChunkKeys = NS.bodyChunkKeys or weakKeyTable()
 NS.nextFoodSearch = NS.nextFoodSearch or weakKeyTable()
+NS.feedingBodies = NS.feedingBodies or weakKeyTable()
 NS.lastReserveTransmit = NS.lastReserveTransmit or weakKeyTable()
 NS.context = NS.context or nil
 NS.sectorRoot = NS.sectorRoot or nil
@@ -113,6 +114,11 @@ end
 
 local function clamp(value, minimum, maximum)
     return math.max(minimum, math.min(maximum, value))
+end
+
+local function tableIsEmpty(values)
+    for _ in pairs(values) do return false end
+    return true
 end
 
 local function optionBoolean(name, fallback)
@@ -230,7 +236,7 @@ local function removeFromIndex(body)
     local bucket = NS.bodyChunks[key]
     if bucket ~= nil then
         bucket[body] = nil
-        if next(bucket) == nil then NS.bodyChunks[key] = nil end
+        if tableIsEmpty(bucket) then NS.bodyChunks[key] = nil end
     end
     NS.bodyChunkKeys[body] = nil
 end
@@ -331,6 +337,7 @@ local function detachEaters(body)
     for index = eaters:size() - 1, 0, -1 do
         local zombie = eaters:get(index)
         if zombie ~= nil then
+            NS.feedingBodies[zombie] = nil
             pcall(function() zombie:setBodyToEat(nil) end)
             pcall(function() zombie:setEatBodyTarget(nil, false) end)
         end
@@ -339,6 +346,7 @@ end
 
 local function detachZombieFromBody(zombie)
     if zombie == nil then return end
+    NS.feedingBodies[zombie] = nil
     pcall(function() zombie:setBodyToEat(nil) end)
     pcall(function() zombie:setEatBodyTarget(nil, false) end)
 end
@@ -558,6 +566,7 @@ local function consumeFromCurrentTarget(zombie, data, elapsedHours, currentHour)
     if elapsedHours <= 0 or zombie.getEatBodyTarget == nil then return end
     local ok, body = pcall(function() return zombie:getEatBodyTarget() end)
     if not ok or body == nil or not isEdibleBodyType(body) then return end
+    NS.feedingBodies[zombie] = body
     if not bodyCanFeedZombie(body, zombie, currentHour) then
         detachZombieFromBody(zombie)
         detachEaters(body)
@@ -569,16 +578,7 @@ local function consumeFromCurrentTarget(zombie, data, elapsedHours, currentHour)
         0,
         MAX_RESERVE_DAYS
     )
-    local remainingCapacity = MAX_RESERVE_DAYS - reserve
-    if remainingCapacity <= 0 then
-        detachZombieFromBody(zombie)
-        return
-    end
-
-    local requested = math.min(
-        CONSUMPTION_RESOURCE_PER_HOUR * elapsedHours,
-        remainingCapacity / ASSIMILATION_EFFICIENCY
-    )
+    local requested = CONSUMPTION_RESOURCE_PER_HOUR * elapsedHours
     local consumed = takeResourceFromBody(body, requested, currentHour)
     if consumed <= 0 then
         detachZombieFromBody(zombie)
@@ -673,8 +673,15 @@ end
 
 local function targetAnimal(zombie, animal)
     if zombie == nil or animal == nil then return end
-    pcall(function() zombie:setTarget(animal) end)
-    pcall(function() zombie:pathToCharacter(animal) end)
+    local spotted = false
+    if zombie.spotted ~= nil then
+        spotted = pcall(function() zombie:spotted(animal, true) end)
+    end
+    if not spotted then
+        pcall(function() zombie:setTarget(animal) end)
+        pcall(function() zombie:pathToCharacter(animal) end)
+    end
+    pcall(function() zombie:setTargetSeenTime(10) end)
     if animal.getBehavior ~= nil then
         local ok, behavior = pcall(function() return animal:getBehavior() end)
         if ok and behavior ~= nil and behavior.forceFleeFromChr ~= nil then
@@ -683,10 +690,48 @@ local function targetAnimal(zombie, animal)
     end
 end
 
+local function continueAssignedFeeding(zombie, currentHour)
+    local body = NS.feedingBodies[zombie]
+    if body == nil then return false end
+    if not bodyCanFeedZombie(body, zombie, currentHour) then
+        detachZombieFromBody(zombie)
+        return false
+    end
+
+    local target = zombie.getTarget ~= nil and zombie:getTarget() or nil
+    if target ~= nil and target ~= body then
+        return true
+    end
+
+    local dx = body:getX() - zombie:getX()
+    local dy = body:getY() - zombie:getY()
+    if dx * dx + dy * dy > 1 then
+        pcall(function()
+            zombie:pathToLocationF(body:getX(), body:getY(), body:getZ())
+        end)
+        return true
+    end
+
+    local eatingTarget = zombie.getEatBodyTarget ~= nil
+        and zombie:getEatBodyTarget() or nil
+    if eatingTarget ~= body then
+        pcall(function() zombie:setBodyToEat(body) end)
+    end
+    return true
+end
+
 local function chooseFoodIfHungry(zombie, data, currentHour)
+    if continueAssignedFeeding(zombie, currentHour) then return end
+
     local reserve = tonumber(data.ExtinctionBiologicalReserve) or 0
     if reserve > HUNGER_RESERVE_DAYS then return end
-    if zombie.getTarget ~= nil and zombie:getTarget() ~= nil then return end
+    if zombie.getTarget ~= nil and zombie:getTarget() ~= nil then
+        local target = zombie:getTarget()
+        if type(instanceof) == "function" and instanceof(target, "IsoAnimal") then
+            targetAnimal(zombie, target)
+        end
+        return
+    end
     if zombie.isCrawling ~= nil and zombie:isCrawling() then return end
     if zombie.getEatBodyTarget ~= nil and zombie:getEatBodyTarget() ~= nil then return end
 
@@ -696,7 +741,15 @@ local function chooseFoodIfHungry(zombie, data, currentHour)
 
     local body = nearestEdibleBody(zombie, currentHour)
     if body ~= nil then
+        NS.feedingBodies[zombie] = body
         pcall(function() zombie:setBodyToEat(body) end)
+        local dx = body:getX() - zombie:getX()
+        local dy = body:getY() - zombie:getY()
+        if dx * dx + dy * dy > 1 then
+            pcall(function()
+                zombie:pathToLocationF(body:getX(), body:getY(), body:getZ())
+            end)
+        end
         return
     end
 
@@ -785,6 +838,7 @@ function NS.trackBody(body)
         return
     end
     addToIndex(body)
+    ensureBodyResource(body, NS.context.apocalypseAgeHours())
 end
 
 function NS.untrackBody(body)

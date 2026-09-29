@@ -29,3 +29,9 @@ option Extinction.TestShowBiologicalState = {
     page = Extinction, translation = Extinction.TestShowBiologicalState,
     _tooltip = Extinction.TestShowBiologicalState_tooltip,
 }
+
+option Extinction.TestShowCorpseNutrition = {
+    type = boolean, default = false,
+    page = Extinction, translation = Extinction.TestShowCorpseNutrition,
+    _tooltip = Extinction.TestShowCorpseNutrition_tooltip,
+}

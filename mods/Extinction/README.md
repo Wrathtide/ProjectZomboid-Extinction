@@ -14,8 +14,9 @@ and animal corpses are eligible; living animal hunting is separately
 configurable. Zombies never attack living zombies for food. Biological reserve
 is capped at 21 days even after feeding or rain.
 
-One disabled-by-default testing checkbox displays a compact biological-state
-label over nearby zombies.
+Two disabled-by-default testing checkboxes display either a compact
+biological-state label over nearby zombies or the remaining raw and usable
+nutritional value over nearby corpses.
 
 ## Inspiration
 
@@ -187,7 +188,7 @@ Enable **Extinction** when creating a new world. When using Project A-Life, enab
 ## Version and validation
 
 - Target game version: **Project Zomboid Build 42.20+**.
-- Mod version: **1.1.0-beta.5**.
+- Mod version: **1.1.0-beta.6**.
 - Lua syntax is checked with the Kahlua parser shipped with the local game installation.
 - Events and Java methods are verified directly against the local `projectzomboid.jar`.
 - Sandbox-option and translation files are validated statically.

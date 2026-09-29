@@ -40,6 +40,7 @@ Non-negotiable rules:
 | Days From Death to Skeletonization | Integer | 180 | Remains available in both modes. |
 | Zombies Hunt Living Animals | Checkbox | On | Allows hungry zombies to select living animals as prey in natural mode. |
 | Testing: Show Zombie Biological State | Checkbox | Off | Draws a compact state label over nearby active zombies. |
+| Testing: Show Corpse Nutrition | Checkbox | Off | Draws the remaining raw and usable nutritional value over nearby corpses. |
 
 Natural Extinction remains disabled by default. The fixed extinction schedule
 continues to be the predictable standard mode.
@@ -217,7 +218,12 @@ Extinction reuses the game's native zombie corpse-eating behaviour for:
 - the native simultaneous-eater limit.
 
 Extinction extends selection and performs server-authoritative resource
-accounting.
+accounting. Because the native eating state has a randomized internal timer and
+may end before a corpse is exhausted, Extinction remembers the corpse assigned
+to each feeding zombie. When the timer expires or feeding is temporarily
+interrupted, the zombie returns to that corpse and resumes eating if no
+higher-priority target is present. This continues until the corpse resource
+reaches zero.
 
 A hungry zombie may select a corpse only if:
 
@@ -231,6 +237,9 @@ A hungry zombie may select a corpse only if:
 Shared corpse resources are debited exactly once. Only 70% of consumed resource
 is added to zombie reserves. Digestion, feeding loss, decomposition, and
 metabolic expenditure permanently remove matter from the closed system.
+Feeding continues even when the zombie has reached the 21-day reserve cap; the
+corpse is still depleted, but surplus energy is discarded and cannot extend the
+reserve beyond that cap.
 
 ## Living animal hunting
 
@@ -251,7 +260,9 @@ The beta implementation:
 1. searches the game's active animal list only when a hungry zombie found no
    usable corpse;
 2. keeps the animal search bounded;
-3. assigns the animal through the zombie's native target and pathing methods;
+3. passes the animal through the same native `spotted(...)` detection path used
+   for living character targets, establishing the target, pursuit, and ordinary
+   close-range attack behaviour;
 4. triggers the animal's native flee response;
 5. relies on the inherited native attack path because `IsoAnimal` is an
    `IsoPlayer` subclass;
@@ -350,9 +361,9 @@ Examples:
 - Real zombies created by another mod follow the same extinction rules.
 A dedicated Project A-Life runtime test remains mandatory.
 
-## Testing overlay
+## Testing overlays
 
-The overlay is a simple sandbox checkbox and defaults to Off.
+Both overlays are simple sandbox checkboxes and default to Off.
 
 ### Testing: Show Zombie Biological State
 
@@ -373,6 +384,18 @@ Possible states:
 
 The reserve value is authoritative. Approximate days are a baseline diagnostic,
 not a promised death date.
+
+### Testing: Show Corpse Nutrition
+
+The client draws a compact label over nearby human, zombie, and animal corpses:
+
+```text
+Human corpse | raw 12.80d | usable 8.96d
+```
+
+`raw` is the remaining gross corpse resource. `usable` is the part that can
+still become zombie reserve after the 70% digestion efficiency is applied.
+Pending and depleted corpses are visually distinguished.
 
 The overlay:
 
@@ -408,7 +431,7 @@ Dense-city profiling remains required before release.
 | Lock fixed deadline | Verified | Existing UI hook already supports it. |
 | One zombie reserve | Implemented; runtime test required | Uses synchronized zombie mod data and sector batches. |
 | One lazy corpse resource | Implemented; runtime test required | Uses native death age and absolute-age decay caps. |
-| Native corpse eating | Verified API path | Uses `setBodyToEat` and the game's eating state. |
+| Native corpse eating | Verified API path | Uses `setBodyToEat`, remembers the assigned corpse, and resumes the game's eating state until depletion. |
 | Human/zombie corpse feeding | Implemented; runtime test required | Eligible `IsoDeadBody` objects are indexed by chunk. |
 | Animal corpse feeding | Implemented; runtime test required | Animal type and size APIs are present. |
 | Current rain support | Implemented; runtime test required | Climate, snow, temperature, and outdoor APIs are present. |
@@ -463,10 +486,11 @@ Dense-city profiling remains required before release.
 - [ ] Living Project A-Life NPCs remain untouched.
 - [ ] Unmarked real `IsoZombie` objects from other mods participate.
 
-### Testing overlay
+### Testing overlays
 
 - [ ] Biological labels show nearby active zombies only.
 - [ ] Multiplayer labels contain server-authoritative values.
+- [ ] Corpse labels decrease during feeding and remain synchronized with the server-authoritative resource.
 - [ ] Dense-city overlay remains readable and performant.
 
 ### Performance

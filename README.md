@@ -36,10 +36,10 @@ Extinction is an independent fan-made project. It is not an adaptation, contains
 - Optional natural-extinction mode with one persistent biological reserve per zombie.
 - A medically grounded 21-day hard cap on biological reserve, including after feeding or rain.
 - Rain and temperature affect survival without adding separate hydration fields.
-- Native corpse-eating behaviour for human, zombie, and animal remains.
-- Optional pursuit of living animals through the game's native targeting path.
+- Persistent native corpse-eating behaviour for human, zombie, and animal remains: an assigned corpse is resumed after the native eating timer or a temporary interruption until its resource is exhausted.
+- Optional pursuit and attack of living animals through the game's native detection and targeting path.
 - Consumed bodies preserve hard loot while selected clothing and soft bags are removed.
-- An opt-in biological-state overlay for runtime testing.
+- Separate opt-in overlays for zombie biological state and corpse nutrition.
 
 ## Extinction schedule
 
@@ -167,6 +167,8 @@ Enabling the mod adds an **Extinction** page to the sandbox settings.
 - The reserve can never exceed 21 days, including after corpse feeding or rain.
 - Rain, temperature, activity, corpse feeding, and reserve-dependent systemic failure affect survival.
 - Hungry zombies may use existing, non-skeletal human, zombie, or animal corpses.
+- Once feeding begins, the assigned corpse is remembered and feeding resumes after the native eating timer or a temporary interruption until no resource remains.
+- A fully consumed human or zombie corpse is converted into a native skeleton.
 - Zombies never attack living zombies to obtain food.
 - Resources removed from a corpse are shared and cannot be consumed twice.
 - Digestion, metabolism, and decomposition permanently remove resources from the system.
@@ -178,13 +180,14 @@ Enabling the mod adds an **Extinction** page to the sandbox settings.
 - Default: `On`
 - Used only by Natural Extinction.
 - A hungry zombie that found no corpse may target a nearby living animal.
-- The game supplies targeting, pathing, attack, flee, death, and corpse behaviour.
+- The zombie enters the game's native `spotted(...)` detection path, which supplies targeting, pathing, close-range attack, flee, death, and corpse behaviour.
 - Full animal animation and multiplayer validation remains a required in-game test.
 
-### Testing overlay
+### Testing overlays
 
 - **Show zombie biological state** displays reserve, approximate baseline survival time, and current state over nearby zombies.
-- The option defaults to `Off`.
+- **Show corpse nutrition** displays the remaining raw and usable nutritional value over nearby human, zombie, and animal corpses.
+- Both options default to `Off`.
 
 ### Days until complete zombie extinction
 
@@ -218,7 +221,7 @@ Enable **Extinction** when creating a new world. When using Project A-Life, enab
 ## Version and validation
 
 - Target game version: **Project Zomboid Build 42.20+**.
-- Mod version: **1.1.0-beta.5**.
+- Mod version: **1.1.0-beta.6**.
 - Lua syntax is checked with the Kahlua parser shipped with the local game installation.
 - Events and Java methods are verified directly against the local `projectzomboid.jar`.
 - Sandbox-option and translation files are validated statically.
