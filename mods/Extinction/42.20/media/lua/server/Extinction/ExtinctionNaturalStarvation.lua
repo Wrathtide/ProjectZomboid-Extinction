@@ -16,9 +16,15 @@ local HUMAN_CORPSE_RESOURCE = 12.8
 local FOOD_SEARCH_RADIUS = 10
 local ANIMAL_SEARCH_RADIUS = 16
 local ANIMAL_ATTACK_INTERVAL_MS = 1800
-local ANIMAL_ATTACK_WINDUP_MS = 300
+local ANIMAL_ATTACK_WINDUP_MS = 550
 local ANIMAL_ATTACK_HIT_GRACE = 1.25
 local ANIMAL_ATTACK_TRACE_LIMIT = 160
+local ANIMAL_CORPSE_TRACE_LIMIT = 40
+-- Build 42's read-only bAttack callback uses this internal vector and requires
+-- a standing zombie to be within 0.72 tiles. Large animals can be bitten from
+-- farther away, so the animation bridge temporarily presents a normal bite
+-- distance while the separate, size-aware range check remains authoritative.
+local ANIMAL_NATIVE_ATTACK_DISTANCE = 0.65
 -- This value is passed through the animal's native species resistance.
 -- Adult livestock keeps only 1% of it, while small animals keep 10-20%.
 local ANIMAL_BITE_DAMAGE = 2.5
@@ -106,6 +112,8 @@ NS.animalTargets = NS.animalTargets or weakKeyTable()
 NS.nextAnimalAttackMs = NS.nextAnimalAttackMs or weakKeyTable()
 NS.pendingAnimalBites = NS.pendingAnimalBites or weakKeyTable()
 NS.animalAttackTraceCount = tonumber(NS.animalAttackTraceCount) or 0
+NS.animalCorpseTraceCount = tonumber(NS.animalCorpseTraceCount) or 0
+NS.tracedAnimalCorpses = NS.tracedAnimalCorpses or weakKeyTable()
 NS.animalAttackModeActive = NS.animalAttackModeActive == true
 NS.lastReserveTransmit = NS.lastReserveTransmit or weakKeyTable()
 NS.context = NS.context or nil
@@ -776,24 +784,27 @@ local function refreshAnimalPursuit(zombie, animal)
     end
 end
 
+local function primeNativeAnimalBiteAnimation(zombie, animal)
+    -- ActionContext and AdvancedAnimator are public Java classes, but Build
+    -- 42.21 does not expose them to Lua. The native zombie action graph can
+    -- still enter its regular attack state through the read-only bAttack
+    -- callback when the target, facing and vector distance are valid.
+    return pcall(function()
+        zombie:faceThisObject(animal)
+        zombie:setTarget(animal)
+        zombie.vectorToTarget:setLength(ANIMAL_NATIVE_ATTACK_DISTANCE)
+    end)
+end
+
 local function beginAnimalBite(zombie, animal, nowMs)
     local distance = animalDistance(zombie, animal)
     local range = animalAttackRange(zombie, animal)
-    pcall(function() zombie:faceThisObject(animal) end)
-    pcall(function() zombie:setTarget(animal) end)
+    local animationPrimed, animationError = primeNativeAnimalBiteAnimation(zombie, animal)
     pcall(function() zombie:setVariable("AttackType", "bite") end)
     pcall(function() zombie:setAttackOutcome("start") end)
     if AttackState ~= nil and AttackState.instance ~= nil then
         pcall(function() zombie:changeState(AttackState.instance()) end)
     end
-    pcall(function()
-        local context = zombie:getActionContext()
-        local group = context and context:getGroup() or nil
-        local attackState = group and group:findState("attack") or nil
-        if context ~= nil and attackState ~= nil then
-            context:setCurrentState(attackState)
-        end
-    end)
     NS.pendingAnimalBites[zombie] = {
         animal = animal,
         hitAt = nowMs + ANIMAL_ATTACK_WINDUP_MS,
@@ -803,8 +814,12 @@ local function beginAnimalBite(zombie, animal, nowMs)
     if NS.animalAttackTraceCount < ANIMAL_ATTACK_TRACE_LIMIT then
         NS.animalAttackTraceCount = NS.animalAttackTraceCount + 1
         print(string.format(
-            "[Extinction] Animal attack bite started: distance=%.2f range=%.2f",
-            distance, range))
+            "[Extinction] Animal attack bite started: distance=%.2f range=%.2f nativeAnimation=%s",
+            distance, range, tostring(animationPrimed)))
+        if not animationPrimed then
+            print("[Extinction] Animal attack animation bridge failed: "
+                .. tostring(animationError))
+        end
     end
 end
 
@@ -885,13 +900,14 @@ local function finishAnimalBite(zombie, pending)
     end
     if healthAfter > 0 then return end
 
-    pcall(function() animal:Kill(zombie) end)
-    pcall(function() animal:DoDeath(nil, zombie) end)
-    pcall(function() animal:die() end)
-    pcall(function() zombie:setTarget(nil) end)
+    -- Do not call Kill(), DoDeath() or die() here. Combining those character
+    -- death paths can remove an IsoAnimal before its native death animation
+    -- creates an IsoDeadBody. Health zero is the native animal death trigger;
+    -- setHealth() also sends the required server update.
+    pcall(function() animal:setHealth(0) end)
     if NS.animalAttackTraceCount < ANIMAL_ATTACK_TRACE_LIMIT then
         NS.animalAttackTraceCount = NS.animalAttackTraceCount + 1
-        print("[Extinction] Animal attack kill completed")
+        print("[Extinction] Animal attack native death requested: health=0")
     end
     clearAnimalTarget(zombie)
     NS.nextFoodSearch[zombie] = 0
@@ -923,6 +939,7 @@ function NS.processAnimalAttacks()
         else
             local pending = NS.pendingAnimalBites[zombie]
             if pending ~= nil then
+                primeNativeAnimalBiteAnimation(zombie, animal)
                 if nowMs >= pending.hitAt then finishAnimalBite(zombie, pending) end
             else
                 refreshAnimalPursuit(zombie, animal)
@@ -1100,6 +1117,22 @@ function NS.trackBody(body)
     end
     addToIndex(body)
     ensureBodyResource(body, NS.context.apocalypseAgeHours())
+    local animal = false
+    pcall(function() animal = body:isAnimal() end)
+    if animal and not NS.tracedAnimalCorpses[body]
+            and NS.animalCorpseTraceCount < ANIMAL_CORPSE_TRACE_LIMIT then
+        NS.tracedAnimalCorpses[body] = true
+        NS.animalCorpseTraceCount = NS.animalCorpseTraceCount + 1
+        local animalType = "unknown"
+        local skeleton = false
+        pcall(function() animalType = tostring(body:getAnimalType() or animalType) end)
+        if body.isAnimalSkeleton ~= nil then
+            pcall(function() skeleton = body:isAnimalSkeleton() end)
+        end
+        print(string.format(
+            "[Extinction] Animal corpse registered: type=%s skeleton=%s",
+            animalType, tostring(skeleton)))
+    end
 end
 
 function NS.untrackBody(body)
