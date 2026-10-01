@@ -16,8 +16,9 @@ local HUMAN_CORPSE_RESOURCE = 12.8
 local FOOD_SEARCH_RADIUS = 10
 local ANIMAL_SEARCH_RADIUS = 16
 local ANIMAL_ATTACK_INTERVAL_MS = 1800
-local ANIMAL_ATTACK_WINDUP_MS = 450
-local ANIMAL_ATTACK_HIT_GRACE = 0.75
+local ANIMAL_ATTACK_WINDUP_MS = 300
+local ANIMAL_ATTACK_HIT_GRACE = 1.25
+local ANIMAL_ATTACK_TRACE_LIMIT = 160
 -- This value is passed through the animal's native species resistance.
 -- Adult livestock keeps only 1% of it, while small animals keep 10-20%.
 local ANIMAL_BITE_DAMAGE = 2.5
@@ -104,6 +105,7 @@ NS.feedingBodies = NS.feedingBodies or weakKeyTable()
 NS.animalTargets = NS.animalTargets or weakKeyTable()
 NS.nextAnimalAttackMs = NS.nextAnimalAttackMs or weakKeyTable()
 NS.pendingAnimalBites = NS.pendingAnimalBites or weakKeyTable()
+NS.animalAttackTraceCount = tonumber(NS.animalAttackTraceCount) or 0
 NS.animalAttackModeActive = NS.animalAttackModeActive == true
 NS.lastReserveTransmit = NS.lastReserveTransmit or weakKeyTable()
 NS.context = NS.context or nil
@@ -686,6 +688,7 @@ end
 
 local function targetAnimal(zombie, animal)
     if zombie == nil or animal == nil then return end
+    local targetChanged = NS.animalTargets[zombie] ~= animal
     NS.animalTargets[zombie] = animal
     local spotted = false
     if zombie.spotted ~= nil then
@@ -701,6 +704,12 @@ local function targetAnimal(zombie, animal)
         if ok and behavior ~= nil and behavior.forceFleeFromChr ~= nil then
             pcall(function() behavior:forceFleeFromChr(zombie) end)
         end
+    end
+    if targetChanged and NS.animalAttackTraceCount < ANIMAL_ATTACK_TRACE_LIMIT then
+        local animalType = "unknown"
+        pcall(function() animalType = tostring(animal:getAnimalType() or animalType) end)
+        NS.animalAttackTraceCount = NS.animalAttackTraceCount + 1
+        print("[Extinction] Animal attack target acquired: " .. animalType)
     end
 end
 
@@ -722,15 +731,14 @@ local function animalIsAlive(animal)
 end
 
 local function animalAttackRange(zombie, animal)
-    local zombieWidth = 0.30
-    local animalWidth = 0.30
-    if zombie.getWidth ~= nil then
-        pcall(function() zombieWidth = tonumber(zombie:getWidth()) or zombieWidth end)
+    -- IsoMovingObject width is a movement collision radius and remains close to
+    -- human size even for cattle. Corpse size is the only native value that
+    -- consistently scales with the visible body of every vanilla animal.
+    local corpseSize = 0
+    if animal.getCorpseSize ~= nil then
+        pcall(function() corpseSize = tonumber(animal:getCorpseSize()) or 0 end)
     end
-    if animal.getWidth ~= nil then
-        pcall(function() animalWidth = tonumber(animal:getWidth()) or animalWidth end)
-    end
-    return clamp(0.55 + zombieWidth + animalWidth, 0.90, 1.60)
+    return clamp(1.15 + math.max(0, corpseSize) * 0.35, 1.25, 2.65)
 end
 
 local function animalAttackPathIsClear(zombie, animal)
@@ -743,15 +751,19 @@ local function animalAttackPathIsClear(zombie, animal)
     return not blocked
 end
 
-local function animalIsInBiteRange(zombie, animal, extraRange)
-    if not animalIsAlive(animal) then return false end
-    if math.abs(zombie:getZ() - animal:getZ()) >= 0.2 then return false end
+local function animalDistance(zombie, animal)
     local dx = animal:getX() - zombie:getX()
     local dy = animal:getY() - zombie:getY()
+    return math.sqrt(dx * dx + dy * dy)
+end
+
+local function animalIsInBiteRange(zombie, animal, extraRange, requireClearPath)
+    if not animalIsAlive(animal) then return false end
+    if math.abs(zombie:getZ() - animal:getZ()) >= 0.2 then return false end
     local range = animalAttackRange(zombie, animal)
         + math.max(0, tonumber(extraRange) or 0)
-    return dx * dx + dy * dy <= range * range
-        and animalAttackPathIsClear(zombie, animal)
+    if animalDistance(zombie, animal) > range then return false end
+    return requireClearPath == false or animalAttackPathIsClear(zombie, animal)
 end
 
 local function refreshAnimalPursuit(zombie, animal)
@@ -765,6 +777,8 @@ local function refreshAnimalPursuit(zombie, animal)
 end
 
 local function beginAnimalBite(zombie, animal, nowMs)
+    local distance = animalDistance(zombie, animal)
+    local range = animalAttackRange(zombie, animal)
     pcall(function() zombie:faceThisObject(animal) end)
     pcall(function() zombie:setTarget(animal) end)
     pcall(function() zombie:setVariable("AttackType", "bite") end)
@@ -783,15 +797,44 @@ local function beginAnimalBite(zombie, animal, nowMs)
     NS.pendingAnimalBites[zombie] = {
         animal = animal,
         hitAt = nowMs + ANIMAL_ATTACK_WINDUP_MS,
+        startRange = range,
     }
     NS.nextAnimalAttackMs[zombie] = nowMs + ANIMAL_ATTACK_INTERVAL_MS
+    if NS.animalAttackTraceCount < ANIMAL_ATTACK_TRACE_LIMIT then
+        NS.animalAttackTraceCount = NS.animalAttackTraceCount + 1
+        print(string.format(
+            "[Extinction] Animal attack bite started: distance=%.2f range=%.2f",
+            distance, range))
+    end
 end
 
 local function finishAnimalBite(zombie, pending)
     local animal = pending and pending.animal or nil
     NS.pendingAnimalBites[zombie] = nil
-    if not animalIsInBiteRange(zombie, animal, ANIMAL_ATTACK_HIT_GRACE) then return end
-    if zombie.isNoTeeth ~= nil and zombie:isNoTeeth() then return end
+    -- The animal is told to flee when targeted. Do not repeat the square
+    -- obstruction test after the wind-up: a small position change used to
+    -- cancel every bite even though the zombie had already reached the prey.
+    if not animalIsInBiteRange(zombie, animal, ANIMAL_ATTACK_HIT_GRACE, false) then
+        pcall(function() zombie:setAttackOutcome("fail") end)
+        if NS.animalAttackTraceCount < ANIMAL_ATTACK_TRACE_LIMIT and animal ~= nil then
+            NS.animalAttackTraceCount = NS.animalAttackTraceCount + 1
+            print(string.format(
+                "[Extinction] Animal attack bite missed: distance=%.2f limit=%.2f",
+                animalDistance(zombie, animal),
+                (tonumber(pending.startRange) or animalAttackRange(zombie, animal))
+                    + ANIMAL_ATTACK_HIT_GRACE))
+        end
+        return
+    end
+    if zombie.isNoTeeth ~= nil and zombie:isNoTeeth() then
+        pcall(function() zombie:setAttackOutcome("fail") end)
+        return
+    end
+
+    -- Move the advanced animation graph from Zombie_Bite_Start to
+    -- Zombie_Bite_Success. The collision event in that graph cannot damage an
+    -- IsoAnimal, so Extinction applies the corresponding damage below.
+    pcall(function() zombie:setAttackOutcome("success") end)
 
     local healthBefore = nil
     pcall(function() healthBefore = tonumber(animal:getHealth()) end)
@@ -805,12 +848,12 @@ local function finishAnimalBite(zombie, pending)
     end
     if not hit then
         print("[Extinction] Animal bite hitConsequences failed: " .. tostring(hitError))
-        return
     end
 
     local healthAfter = healthBefore
     pcall(function() healthAfter = tonumber(animal:getHealth()) or healthBefore end)
-    if healthAfter >= healthBefore then
+    local usedFallback = false
+    if not hit or healthAfter >= healthBefore then
         local invincible = false
         if animal.isInvincible ~= nil then
             pcall(function() invincible = animal:isInvincible() end)
@@ -826,6 +869,7 @@ local function finishAnimalBite(zombie, pending)
             pcall(function()
                 animal:setHealth(math.max(0, healthBefore
                     - ANIMAL_BITE_DAMAGE * speciesLoss))
+                usedFallback = true
                 if animal.sendExtraUpdateToClients ~= nil then
                     animal:sendExtraUpdateToClients()
                 end
@@ -833,12 +877,22 @@ local function finishAnimalBite(zombie, pending)
             end)
         end
     end
+    if NS.animalAttackTraceCount < ANIMAL_ATTACK_TRACE_LIMIT then
+        NS.animalAttackTraceCount = NS.animalAttackTraceCount + 1
+        print(string.format(
+            "[Extinction] Animal attack bite landed: health=%.4f->%.4f fallback=%s",
+            healthBefore, healthAfter, tostring(usedFallback)))
+    end
     if healthAfter > 0 then return end
 
     pcall(function() animal:Kill(zombie) end)
     pcall(function() animal:DoDeath(nil, zombie) end)
     pcall(function() animal:die() end)
     pcall(function() zombie:setTarget(nil) end)
+    if NS.animalAttackTraceCount < ANIMAL_ATTACK_TRACE_LIMIT then
+        NS.animalAttackTraceCount = NS.animalAttackTraceCount + 1
+        print("[Extinction] Animal attack kill completed")
+    end
     clearAnimalTarget(zombie)
     NS.nextFoodSearch[zombie] = 0
 end

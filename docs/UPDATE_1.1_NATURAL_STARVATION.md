@@ -271,6 +271,16 @@ The beta implementation:
    counterattack, death, synchronization, and corpse creation;
 7. leaves the normal animal corpse for the corpse-resource model.
 
+The bite threshold is a centre-to-centre distance scaled with the animal's
+native corpse-size value. Build 42's generic moving-object width does not scale
+with the visible body of large livestock and therefore cannot be used as the
+attack boundary. A short post-animation allowance prevents fleeing movement
+during the bite wind-up from cancelling every otherwise valid hit. Beta builds
+also emit a bounded attack trace for target, wind-up, hit or miss, damage, and
+death. A valid bite also advances the native zombie animation graph from
+`Zombie_Bite_Start` to `Zombie_Bite_Success`; Extinction supplies only the
+animal damage that the vanilla collision event refuses to apply.
+
 Runtime testing must still confirm attack damage, animation alignment, fleeing,
 multiplayer authority, and corpse creation for every supported animal size.
 The damage bridge is server-authoritative and calls the animal's own
