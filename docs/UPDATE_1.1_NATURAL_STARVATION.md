@@ -38,7 +38,7 @@ Non-negotiable rules:
 | Natural Extinction | Checkbox | Off | Enables the biological-reserve simulation. |
 | Days Until Complete Zombie Extinction | Integer | 21 | Used only in fixed mode. Locked and ignored in natural mode. |
 | Days From Death to Skeletonization | Integer | 180 | Remains available in both modes. |
-| Zombies Hunt Living Animals | Checkbox | On | Allows hungry zombies to select living animals as prey in natural mode. |
+| Zombies Hunt Living Animals | Checkbox | On | Allows hungry zombies to select living animals as prey and completes native animal pursuits by ordinary zombies in natural mode. |
 | Testing: Show Zombie Biological State | Checkbox | Off | Draws a compact state label over nearby active zombies. |
 | Testing: Show Corpse Nutrition | Checkbox | Off | Draws the remaining raw and usable nutritional value over nearby corpses. |
 
@@ -258,7 +258,9 @@ The current Build 42 API supports the required path:
 The beta implementation:
 
 1. searches the game's active animal list only when a hungry zombie found no
-   usable corpse;
+   usable corpse; if Build 42 has already assigned an animal target to any
+   ordinary zombie, adopts that native target so the pursuit can end in an
+   attack instead of stopping beside the animal;
 2. keeps the animal search bounded;
 3. passes the animal through the same native `spotted(...)` detection path used
    for living character targets, establishing the target and pursuit;

@@ -179,7 +179,7 @@ Enabling the mod adds an **Extinction** page to the sandbox settings.
 
 - Default: `On`
 - Used only by Natural Extinction.
-- A hungry zombie that found no corpse may target a nearby living animal.
+- A hungry zombie that found no corpse may proactively target a nearby living animal. If Build 42 has already made any ordinary zombie pursue an animal, Extinction adopts that native target and completes the otherwise missing attack even when the zombie is not yet hungry.
 - The zombie enters the game's native `spotted(...)` detection path for targeting and pursuit. Because Build 42 explicitly rejects `IsoAnimal` during the normal zombie hit event, Extinction starts the native `attack` animation state through `ActionContext` and completes close-range bites through the animal's native damage, reaction, death, and corpse APIs. Bite reach is measured from the actors' centres and scaled with the animal's native corpse-size value, so large animals can be bitten when the zombie reaches the visible edge of their body.
 - Beta builds write a bounded set of `[Extinction] Animal attack ...` trace lines to `console.txt`, covering target acquisition, bite start, hit or miss, damage, and death. This makes the remaining in-game validation deterministic without producing an unbounded per-tick log.
 - Full animal animation and multiplayer validation remains a required in-game test.
@@ -222,7 +222,7 @@ Enable **Extinction** when creating a new world. When using Project A-Life, enab
 ## Version and validation
 
 - Target game version: **Project Zomboid Build 42.20+**.
-- Mod version: **1.1.0-beta.10**.
+- Mod version: **1.1.0-beta.11**.
 - Lua syntax is checked with the Kahlua parser shipped with the local game installation.
 - Events and Java methods are verified directly against the local `projectzomboid.jar`.
 - Sandbox-option and translation files are validated statically.

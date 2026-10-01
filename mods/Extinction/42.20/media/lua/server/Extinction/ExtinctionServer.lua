@@ -215,9 +215,10 @@ local function processPendingZombies()
     for zombie, readyTick in pairs(QE.pendingZombies) do
         if readyTick <= QE.tickNumber then
             QE.pendingZombies[zombie] = nil
-            if QE.NaturalStarvation == nil or not QE.NaturalStarvation.isEnabled() then
-                processZombie(zombie)
-            end
+            -- Natural mode also needs this first pass. It initializes the
+            -- biological reserve and can adopt a living-animal target that
+            -- the engine assigned immediately after the zombie was spawned.
+            processZombie(zombie)
             processed = processed + 1
             if processed >= MAX_PENDING_PER_TICK then return end
         end

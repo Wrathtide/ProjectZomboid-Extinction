@@ -189,7 +189,7 @@ Enable **Extinction** when creating a new world. When using Project A-Life, enab
 ## Version and validation
 
 - Target game version: **Project Zomboid Build 42.20+**.
-- Mod version: **1.1.0-beta.10**.
+- Mod version: **1.1.0-beta.11**.
 - Lua syntax is checked with the Kahlua parser shipped with the local game installation.
 - Events and Java methods are verified directly against the local `projectzomboid.jar`.
 - Sandbox-option and translation files are validated statically.

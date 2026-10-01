@@ -3,7 +3,7 @@
     "Sandbox_Extinction.NaturalStarvation": "Natural extinction",
     "Sandbox_Extinction.NaturalStarvation_tooltip": "Replaces the fixed extinction deadline with a biological-reserve simulation. Zombies weaken over time, benefit from rain, and may feed on existing human, zombie, and animal corpses. They never attack living zombies for food. When enabled, Days until complete zombie extinction is ignored and locked.",
     "Sandbox_Extinction.HuntAnimals": "Zombies hunt living animals",
-    "Sandbox_Extinction.HuntAnimals_tooltip": "Used only with Natural extinction. Hungry zombies may pursue living animals with the game's native targeting and attack behaviour. Zombies still never hunt other living zombies.",
+    "Sandbox_Extinction.HuntAnimals_tooltip": "Used only with Natural extinction. Hungry zombies may proactively pursue living animals. If the game already makes another ordinary zombie pursue an animal, Extinction lets it complete the attack. Zombies still never hunt other living zombies.",
     "Sandbox_Extinction.ExtinctionDays": "Days until complete zombie extinction",
     "Sandbox_Extinction.ExtinctionDays_tooltip": "Used only when natural calorie distribution is disabled. Every ordinary zombie receives one permanent random death date between the beginning of the apocalypse and the end of this period. The standard Months Since the Apocalypse setting is respected. A value of 0 causes immediate extinction. Project A-Life characters are not affected.",
     "Sandbox_Extinction.SkeletonizationDays": "Days from death to skeletonization",

@@ -971,18 +971,25 @@ local function chooseFoodIfHungry(zombie, data, currentHour)
         return
     end
 
+    -- Build 42 already lets zombies notice and pursue animals, but its normal
+    -- AttackState explicitly refuses to damage IsoAnimal. Adopt that native
+    -- target before applying the hunger gate so a zombie that is already
+    -- chasing an animal always completes the attack. Only proactive animal
+    -- searches remain restricted to hungry zombies.
+    local currentTarget = zombie.getTarget ~= nil and zombie:getTarget() or nil
+    if currentTarget ~= nil and type(instanceof) == "function"
+            and instanceof(currentTarget, "IsoAnimal") then
+        targetAnimal(zombie, currentTarget)
+        return
+    end
+
     local reserve = tonumber(data.ExtinctionBiologicalReserve) or 0
     if reserve > HUNGER_RESERVE_DAYS then
         clearAnimalTarget(zombie)
         return
     end
-    if zombie.getTarget ~= nil and zombie:getTarget() ~= nil then
-        local target = zombie:getTarget()
-        if type(instanceof) == "function" and instanceof(target, "IsoAnimal") then
-            targetAnimal(zombie, target)
-        else
-            clearAnimalTarget(zombie)
-        end
+    if currentTarget ~= nil then
+        clearAnimalTarget(zombie)
         return
     end
     if zombie.isCrawling ~= nil and zombie:isCrawling() then return end
