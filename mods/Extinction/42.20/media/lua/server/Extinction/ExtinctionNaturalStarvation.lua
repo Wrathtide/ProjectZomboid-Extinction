@@ -20,6 +20,7 @@ local ANIMAL_ATTACK_WINDUP_MS = 550
 local ANIMAL_ATTACK_HIT_GRACE = 1.25
 local ANIMAL_ATTACK_TRACE_LIMIT = 160
 local ANIMAL_CORPSE_TRACE_LIMIT = 40
+local ANIMAL_SEARCH_INTERVAL_HOURS = 0.10
 -- Build 42's read-only bAttack callback uses this internal vector and requires
 -- a standing zombie to be within 0.72 tiles. Large animals can be bitten from
 -- farther away, so the animation bridge temporarily presents a normal bite
@@ -110,6 +111,7 @@ NS.nextFoodSearch = NS.nextFoodSearch or weakKeyTable()
 NS.feedingBodies = NS.feedingBodies or weakKeyTable()
 NS.animalTargets = NS.animalTargets or weakKeyTable()
 NS.nextAnimalAttackMs = NS.nextAnimalAttackMs or weakKeyTable()
+NS.nextAnimalSearch = NS.nextAnimalSearch or weakKeyTable()
 NS.pendingAnimalBites = NS.pendingAnimalBites or weakKeyTable()
 NS.animalAttackTraceCount = tonumber(NS.animalAttackTraceCount) or 0
 NS.animalCorpseTraceCount = tonumber(NS.animalCorpseTraceCount) or 0
@@ -911,6 +913,7 @@ local function finishAnimalBite(zombie, pending)
     end
     clearAnimalTarget(zombie)
     NS.nextFoodSearch[zombie] = 0
+    NS.nextAnimalSearch[zombie] = 0
 end
 
 function NS.processAnimalAttacks()
@@ -918,6 +921,7 @@ function NS.processAnimalAttacks()
         if NS.animalAttackModeActive then
             NS.animalTargets = weakKeyTable()
             NS.nextAnimalAttackMs = weakKeyTable()
+            NS.nextAnimalSearch = weakKeyTable()
             NS.pendingAnimalBites = weakKeyTable()
             NS.animalAttackModeActive = false
         end
@@ -982,7 +986,7 @@ local function continueAssignedFeeding(zombie, currentHour)
     return true
 end
 
-local function chooseFoodIfHungry(zombie, data, currentHour)
+local function chooseFoodAndPrey(zombie, data, currentHour)
     if continueAssignedFeeding(zombie, currentHour) then
         clearAnimalTarget(zombie)
         return
@@ -990,9 +994,8 @@ local function chooseFoodIfHungry(zombie, data, currentHour)
 
     -- Build 42 already lets zombies notice and pursue animals, but its normal
     -- AttackState explicitly refuses to damage IsoAnimal. Adopt that native
-    -- target before applying the hunger gate so a zombie that is already
-    -- chasing an animal always completes the attack. Only proactive animal
-    -- searches remain restricted to hungry zombies.
+    -- target before choosing food so a zombie that is already chasing an
+    -- animal always completes the attack.
     local currentTarget = zombie.getTarget ~= nil and zombie:getTarget() or nil
     if currentTarget ~= nil and type(instanceof) == "function"
             and instanceof(currentTarget, "IsoAnimal") then
@@ -1000,11 +1003,6 @@ local function chooseFoodIfHungry(zombie, data, currentHour)
         return
     end
 
-    local reserve = tonumber(data.ExtinctionBiologicalReserve) or 0
-    if reserve > HUNGER_RESERVE_DAYS then
-        clearAnimalTarget(zombie)
-        return
-    end
     if currentTarget ~= nil then
         clearAnimalTarget(zombie)
         return
@@ -1012,25 +1010,35 @@ local function chooseFoodIfHungry(zombie, data, currentHour)
     if zombie.isCrawling ~= nil and zombie:isCrawling() then return end
     if zombie.getEatBodyTarget ~= nil and zombie:getEatBodyTarget() ~= nil then return end
 
-    local nextSearch = tonumber(NS.nextFoodSearch[zombie]) or 0
-    if currentHour < nextSearch then return end
-    NS.nextFoodSearch[zombie] = currentHour + FOOD_SEARCH_INTERVAL_HOURS
+    local reserve = tonumber(data.ExtinctionBiologicalReserve) or 0
+    if reserve <= HUNGER_RESERVE_DAYS then
+        local nextSearch = tonumber(NS.nextFoodSearch[zombie]) or 0
+        if currentHour >= nextSearch then
+            NS.nextFoodSearch[zombie] = currentHour + FOOD_SEARCH_INTERVAL_HOURS
 
-    local body = nearestEdibleBody(zombie, currentHour)
-    if body ~= nil then
-        clearAnimalTarget(zombie)
-        NS.feedingBodies[zombie] = body
-        pcall(function() zombie:setBodyToEat(body) end)
-        local dx = body:getX() - zombie:getX()
-        local dy = body:getY() - zombie:getY()
-        if dx * dx + dy * dy > 1 then
-            pcall(function()
-                zombie:pathToLocationF(body:getX(), body:getY(), body:getZ())
-            end)
+            local body = nearestEdibleBody(zombie, currentHour)
+            if body ~= nil then
+                clearAnimalTarget(zombie)
+                NS.feedingBodies[zombie] = body
+                pcall(function() zombie:setBodyToEat(body) end)
+                local dx = body:getX() - zombie:getX()
+                local dy = body:getY() - zombie:getY()
+                if dx * dx + dy * dy > 1 then
+                    pcall(function()
+                        zombie:pathToLocationF(body:getX(), body:getY(), body:getZ())
+                    end)
+                end
+                return
+            end
         end
-        return
     end
 
+    -- Living animals are prey in the same sense as living human characters:
+    -- reserve controls corpse feeding, not whether a zombie attacks a living
+    -- creature. Keep this search separate from the heavier corpse-food scan.
+    local nextAnimalSearch = tonumber(NS.nextAnimalSearch[zombie]) or 0
+    if currentHour < nextAnimalSearch then return end
+    NS.nextAnimalSearch[zombie] = currentHour + ANIMAL_SEARCH_INTERVAL_HOURS
     local animal = nearestLivingAnimal(zombie)
     if animal ~= nil then targetAnimal(zombie, animal) end
 end
@@ -1188,7 +1196,7 @@ function NS.processZombie(zombie)
 
     transmitReserveWhenNeeded(zombie, data)
     recordSectorSample(sectorKey, reserve)
-    chooseFoodIfHungry(zombie, data, currentHour)
+    chooseFoodAndPrey(zombie, data, currentHour)
 end
 
 function NS.processBodies()

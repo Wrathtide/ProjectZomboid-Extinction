@@ -3,7 +3,7 @@
     "Sandbox_Extinction.NaturalStarvation": "Naturalne wymieranie",
     "Sandbox_Extinction.NaturalStarvation_tooltip": "Zastępuje sztywny termin wymarcia symulacją jednej rezerwy biologicznej. Zombie słabną z czasem, korzystają z deszczu i mogą żywić się istniejącymi zwłokami ludzi, zombie oraz zwierząt. Nigdy nie atakują żywych zombie dla pożywienia. Po włączeniu pole dni do całkowitego wymarcia jest ignorowane i blokowane.",
     "Sandbox_Extinction.HuntAnimals": "Zombie polują na żywe zwierzęta",
-    "Sandbox_Extinction.HuntAnimals_tooltip": "Używane tylko z naturalnym wymieraniem. Głodne zombie mogą aktywnie ścigać żywe zwierzęta. Jeśli gra skieruje na zwierzę inne zwykłe zombie, Extinction pozwoli mu dokończyć atak. Zombie nadal nigdy nie polują na inne żywe zombie.",
+    "Sandbox_Extinction.HuntAnimals_tooltip": "Używane tylko z naturalnym wymieraniem. Zwykłe zombie mogą aktywnie ścigać żywe zwierzęta tak jak żywych ludzi. Zapas biologiczny nadal decyduje, czy będą żywić się powstałymi zwłokami. Zombie nigdy nie polują na inne żywe zombie.",
     "Sandbox_Extinction.ExtinctionDays": "Dni do całkowitego wymarcia zombie",
     "Sandbox_Extinction.ExtinctionDays_tooltip": "Używane tylko wtedy, gdy naturalna dystrybucja kalorii jest wyłączona. Każde zwykłe zombie otrzymuje stałą, losową datę śmierci między początkiem apokalipsy a końcem podanego okresu. Standardowe ustawienie miesięcy od apokalipsy jest uwzględniane. Wartość 0 powoduje natychmiastowe wymarcie. Ustawienie nie dotyczy postaci Project A-Life.",
     "Sandbox_Extinction.SkeletonizationDays": "Dni od śmierci do szkieletyzacji",
