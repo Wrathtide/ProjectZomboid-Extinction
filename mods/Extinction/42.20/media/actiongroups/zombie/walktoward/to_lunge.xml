@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<transitions>
+    <transition>
+        <transitionTo>attack</transitionTo>
+        <conditionPriority>100</conditionPriority>
+        <conditions>
+            <isTrue>ExtinctionAnimalBiteActive</isTrue>
+            <isFalse>bClient</isFalse>
+            <isFalse>bDead</isFalse>
+            <isFalse>bOnFloor</isFalse>
+            <isFalse>hashitreaction</isFalse>
+        </conditions>
+    </transition>
+    <transition>
+        <transitionTo>lunge</transitionTo>
+        <conditions>
+            <isTrue>bLunge</isTrue>
+            <isFalse>bClient</isFalse>
+        </conditions>
+    </transition>
+</transitions>

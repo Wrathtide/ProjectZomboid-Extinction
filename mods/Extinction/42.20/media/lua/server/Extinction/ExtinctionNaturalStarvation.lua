@@ -16,16 +16,11 @@ local HUMAN_CORPSE_RESOURCE = 12.8
 local FOOD_SEARCH_RADIUS = 10
 local ANIMAL_SEARCH_RADIUS = 16
 local ANIMAL_ATTACK_INTERVAL_MS = 1800
-local ANIMAL_ATTACK_WINDUP_MS = 550
+local ANIMAL_ATTACK_TIMEOUT_MS = 4000
 local ANIMAL_ATTACK_HIT_GRACE = 1.25
 local ANIMAL_ATTACK_TRACE_LIMIT = 160
 local ANIMAL_CORPSE_TRACE_LIMIT = 40
 local ANIMAL_SEARCH_INTERVAL_HOURS = 0.10
--- Build 42's read-only bAttack callback uses this internal vector and requires
--- a standing zombie to be within 0.72 tiles. Large animals can be bitten from
--- farther away, so the animation bridge temporarily presents a normal bite
--- distance while the separate, size-aware range check remains authoritative.
-local ANIMAL_NATIVE_ATTACK_DISTANCE = 0.65
 -- This value is passed through the animal's native species resistance.
 -- Adult livestock keeps only 1% of it, while small animals keep 10-20%.
 local ANIMAL_BITE_DAMAGE = 2.5
@@ -145,7 +140,8 @@ end
 
 local function optionBoolean(name, fallback)
     local group = SandboxVars and SandboxVars.Extinction
-    local value = group and group[name] or nil
+    local value = nil
+    if group ~= nil then value = group[name] end
     if value == nil then return fallback end
     return value == true
 end
@@ -723,10 +719,21 @@ local function targetAnimal(zombie, animal)
     end
 end
 
+local function endAnimalBite(zombie)
+    if NS.pendingAnimalBites[zombie] ~= nil then
+        zombie:clearVariable("ExtinctionAnimalBiteActive")
+        zombie:clearVariable("ExtinctionAnimalBiteStarted")
+        zombie:clearVariable("ExtinctionAnimalBiteContact")
+        zombie:clearVariable("ExtinctionAnimalBiteDone")
+        zombie:setVariable("ZombieBiteDone", true)
+        NS.pendingAnimalBites[zombie] = nil
+    end
+end
+
 local function clearAnimalTarget(zombie)
+    endAnimalBite(zombie)
     NS.animalTargets[zombie] = nil
     NS.nextAnimalAttackMs[zombie] = nil
-    NS.pendingAnimalBites[zombie] = nil
 end
 
 local function animalIsAlive(animal)
@@ -786,53 +793,46 @@ local function refreshAnimalPursuit(zombie, animal)
     end
 end
 
-local function primeNativeAnimalBiteAnimation(zombie, animal)
-    -- ActionContext and AdvancedAnimator are public Java classes, but Build
-    -- 42.21 does not expose them to Lua. The native zombie action graph can
-    -- still enter its regular attack state through the read-only bAttack
-    -- callback when the target, facing and vector distance are valid.
-    return pcall(function()
-        zombie:faceThisObject(animal)
-        zombie:setTarget(animal)
-        zombie.vectorToTarget:setLength(ANIMAL_NATIVE_ATTACK_DISTANCE)
-    end)
+local function animalBiteFlag(zombie, name)
+    return string.lower(tostring(zombie:GetVariable(name) or "")) == "true"
 end
 
 local function beginAnimalBite(zombie, animal, nowMs)
     local distance = animalDistance(zombie, animal)
     local range = animalAttackRange(zombie, animal)
-    local animationPrimed, animationError = primeNativeAnimalBiteAnimation(zombie, animal)
-    pcall(function() zombie:setVariable("AttackType", "bite") end)
-    pcall(function() zombie:setAttackOutcome("start") end)
-    if AttackState ~= nil and AttackState.instance ~= nil then
-        pcall(function() zombie:changeState(AttackState.instance()) end)
-    end
+    zombie:faceThisObject(animal)
+    zombie:setTarget(animal)
+    zombie:setTargetSeenTime(10)
+    zombie:clearVariable("ZombieBiteDone")
+    zombie:clearVariable("ExtinctionAnimalBiteStarted")
+    zombie:clearVariable("ExtinctionAnimalBiteContact")
+    zombie:clearVariable("ExtinctionAnimalBiteDone")
+    -- The XML transition enters the real action graph, which also starts its
+    -- AttackState. The dedicated node reuses Zombie_Bite_Success and reports
+    -- contact/completion without the player-only AttackCollisionCheck event.
+    zombie:setVariable("ExtinctionAnimalBiteActive", true)
     NS.pendingAnimalBites[zombie] = {
         animal = animal,
-        hitAt = nowMs + ANIMAL_ATTACK_WINDUP_MS,
+        expiresAt = nowMs + ANIMAL_ATTACK_TIMEOUT_MS,
         startRange = range,
+        damageApplied = false,
+        animationLogged = false,
     }
     NS.nextAnimalAttackMs[zombie] = nowMs + ANIMAL_ATTACK_INTERVAL_MS
     if NS.animalAttackTraceCount < ANIMAL_ATTACK_TRACE_LIMIT then
         NS.animalAttackTraceCount = NS.animalAttackTraceCount + 1
         print(string.format(
-            "[Extinction] Animal attack bite started: distance=%.2f range=%.2f nativeAnimation=%s",
-            distance, range, tostring(animationPrimed)))
-        if not animationPrimed then
-            print("[Extinction] Animal attack animation bridge failed: "
-                .. tostring(animationError))
-        end
+            "[Extinction] Animal attack animation requested: distance=%.2f range=%.2f",
+            distance, range))
     end
 end
 
 local function finishAnimalBite(zombie, pending)
     local animal = pending and pending.animal or nil
-    NS.pendingAnimalBites[zombie] = nil
     -- The animal is told to flee when targeted. Do not repeat the square
     -- obstruction test after the wind-up: a small position change used to
     -- cancel every bite even though the zombie had already reached the prey.
     if not animalIsInBiteRange(zombie, animal, ANIMAL_ATTACK_HIT_GRACE, false) then
-        pcall(function() zombie:setAttackOutcome("fail") end)
         if NS.animalAttackTraceCount < ANIMAL_ATTACK_TRACE_LIMIT and animal ~= nil then
             NS.animalAttackTraceCount = NS.animalAttackTraceCount + 1
             print(string.format(
@@ -844,14 +844,8 @@ local function finishAnimalBite(zombie, pending)
         return
     end
     if zombie.isNoTeeth ~= nil and zombie:isNoTeeth() then
-        pcall(function() zombie:setAttackOutcome("fail") end)
         return
     end
-
-    -- Move the advanced animation graph from Zombie_Bite_Start to
-    -- Zombie_Bite_Success. The collision event in that graph cannot damage an
-    -- IsoAnimal, so Extinction applies the corresponding damage below.
-    pcall(function() zombie:setAttackOutcome("success") end)
 
     local healthBefore = nil
     pcall(function() healthBefore = tonumber(animal:getHealth()) end)
@@ -911,7 +905,6 @@ local function finishAnimalBite(zombie, pending)
         NS.animalAttackTraceCount = NS.animalAttackTraceCount + 1
         print("[Extinction] Animal attack native death requested: health=0")
     end
-    clearAnimalTarget(zombie)
     NS.nextFoodSearch[zombie] = 0
     NS.nextAnimalSearch[zombie] = 0
 end
@@ -919,6 +912,7 @@ end
 function NS.processAnimalAttacks()
     if not naturalModeEnabled() or not animalHuntingEnabled() then
         if NS.animalAttackModeActive then
+            for zombie, _ in pairs(NS.pendingAnimalBites) do endAnimalBite(zombie) end
             NS.animalTargets = weakKeyTable()
             NS.nextAnimalAttackMs = weakKeyTable()
             NS.nextAnimalSearch = weakKeyTable()
@@ -936,15 +930,44 @@ function NS.processAnimalAttacks()
         local currentTarget = zombieAlive and zombie:getTarget() or nil
         local eatingTarget = zombieAlive and zombie.getEatBodyTarget ~= nil
             and zombie:getEatBodyTarget() or nil
-        if not zombieAlive or not animalIsAlive(animal)
+        local pending = NS.pendingAnimalBites[zombie]
+        -- A lethal bite keeps the animation alive until its end event, even
+        -- if the native animal system has already created the corpse.
+        if not zombieAlive
+                or (not animalIsAlive(animal)
+                    and not (pending ~= nil and pending.damageApplied))
                 or eatingTarget ~= nil
                 or (currentTarget ~= nil and currentTarget ~= animal) then
             clearAnimalTarget(zombie)
         else
-            local pending = NS.pendingAnimalBites[zombie]
             if pending ~= nil then
-                primeNativeAnimalBiteAnimation(zombie, animal)
-                if nowMs >= pending.hitAt then finishAnimalBite(zombie, pending) end
+                local animationStarted = animalBiteFlag(zombie, "ExtinctionAnimalBiteStarted")
+                if animationStarted and not pending.animationLogged then
+                    pending.animationLogged = true
+                    if NS.animalAttackTraceCount < ANIMAL_ATTACK_TRACE_LIMIT then
+                        NS.animalAttackTraceCount = NS.animalAttackTraceCount + 1
+                        print("[Extinction] Animal attack animation playing: Zombie_Bite_Success")
+                    end
+                end
+                if animationStarted and not pending.damageApplied
+                        and animalBiteFlag(zombie, "ExtinctionAnimalBiteContact") then
+                    pending.damageApplied = true
+                    finishAnimalBite(zombie, pending)
+                end
+                if animalBiteFlag(zombie, "ExtinctionAnimalBiteDone") then
+                    endAnimalBite(zombie)
+                    if not animalIsAlive(animal) then clearAnimalTarget(zombie) end
+                elseif nowMs >= pending.expiresAt then
+                    if NS.animalAttackTraceCount < ANIMAL_ATTACK_TRACE_LIMIT then
+                        NS.animalAttackTraceCount = NS.animalAttackTraceCount + 1
+                        print("[Extinction] Animal attack animation timed out: started="
+                            .. tostring(animationStarted) .. " contact="
+                            .. tostring(pending.damageApplied)
+                            .. " action=" .. tostring(zombie:getActionStateName())
+                            .. " animation=" .. tostring(zombie:getAnimationStateName()))
+                    end
+                    endAnimalBite(zombie)
+                end
             else
                 refreshAnimalPursuit(zombie, animal)
                 local nextAttack = tonumber(NS.nextAnimalAttackMs[zombie]) or 0

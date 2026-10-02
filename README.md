@@ -180,8 +180,8 @@ Enabling the mod adds an **Extinction** page to the sandbox settings.
 - Default: `On`
 - Used only by Natural Extinction.
 - Any ordinary zombie may proactively target a nearby living animal, just as it targets a living human. Biological reserve controls whether the zombie feeds from the resulting corpse; it no longer prevents the attack itself. If Build 42 has already made a zombie pursue an animal, Extinction adopts that native target and completes the otherwise missing attack.
-- The zombie enters the game's native `spotted(...)` detection path for targeting and pursuit. Because Build 42 explicitly rejects `IsoAnimal` during the normal zombie hit event, Extinction supplies the normal distance condition used by the read-only `bAttack` callback and completes close-range bites through the animal's native damage and reaction APIs. A lethal bite sets health to exactly zero and then leaves the native animal death animation and corpse creation to the engine. Bite reach is measured from the actors' centres and scaled with the animal's native corpse-size value, so large animals can be bitten when the zombie reaches the visible edge of their body.
-- Beta builds write a bounded set of `[Extinction] Animal attack ...` trace lines to `console.txt`, covering target acquisition, bite start, hit or miss, damage, and death. This makes the remaining in-game validation deterministic without producing an unbounded per-tick log.
+- The zombie enters the game's native `spotted(...)` detection path for targeting and pursuit. A dedicated animation node plays the game's `Zombie_Bite_Success` clip, with damage applied once when that clip reports its contact event. This bypasses the player-only collision event that rejects `IsoAnimal`, without accessing Lua-inaccessible Java fields or writing the read-only `bAttack` callback. A missing animation event does not silently inflict damage. A lethal bite sets health to exactly zero and leaves native animal death and corpse creation to the engine. Bite reach scales with the animal's native corpse-size value.
+- Beta builds write a bounded set of `[Extinction] Animal attack ...` trace lines to `console.txt`, covering target acquisition, animation request, actual animation start, contact damage, completion timeout, and death.
 - Full animal animation and multiplayer validation remains a required in-game test.
 
 ### Testing overlays
@@ -222,7 +222,7 @@ Enable **Extinction** when creating a new world. When using Project A-Life, enab
 ## Version and validation
 
 - Target game version: **Project Zomboid Build 42.20+**.
-- Mod version: **1.1.0-beta.13**.
+- Mod version: **1.1.0-beta.14**.
 - Lua syntax is checked with the Kahlua parser shipped with the local game installation.
 - Events and Java methods are verified directly against the local `projectzomboid.jar`.
 - Sandbox-option and translation files are validated statically.

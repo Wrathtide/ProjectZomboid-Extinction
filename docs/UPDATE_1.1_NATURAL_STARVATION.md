@@ -265,10 +265,11 @@ The beta implementation:
 3. passes the animal through the same native `spotted(...)` detection path used
    for living character targets, establishing the target and pursuit;
 4. triggers the animal's native flee response;
-5. enters the zombie's native `attack` action state without attempting to write
-   the read-only `bAttack` animation variable, then supplies the missing
-   collision damage through `IsoAnimal.hitConsequences(...)` because Build 42's
-   `AttackState` explicitly clears `IsoAnimal` targets instead of damaging them;
+5. enters the native `attack` action state through XML transitions and selects
+   a dedicated `Zombie_Bite_Success` node. Its contact event applies damage once
+   through `IsoAnimal.hitConsequences(...)`, bypassing the vanilla player-only
+   collision event. No Lua-inaccessible Java field or read-only `bAttack`
+   callback is modified;
 6. lets the animal API apply species resistance, hit reaction, blood, fleeing,
    counterattack, death, synchronization, and corpse creation;
 7. leaves the normal animal corpse for the corpse-resource model.
@@ -279,14 +280,16 @@ with the visible body of large livestock and therefore cannot be used as the
 attack boundary. A short post-animation allowance prevents fleeing movement
 during the bite wind-up from cancelling every otherwise valid hit. Beta builds
 also emit a bounded attack trace for target, wind-up, hit or miss, damage, and
-death. A valid bite also advances the native zombie animation graph from
-`Zombie_Bite_Start` to `Zombie_Bite_Success`; Extinction supplies only the
-animal damage that the vanilla collision event refuses to apply.
+death. Start, contact, and completion flags originate from the animation node,
+not an estimated wind-up timer. A missing contact event causes no damage and
+the pending attack is released after a bounded timeout. Existing vanilla
+transition branches remain available when the custom flag is absent.
 
 Runtime testing must still confirm attack damage, animation alignment, fleeing,
 multiplayer authority, and corpse creation for every supported animal size.
 The damage bridge is server-authoritative and calls the animal's own
-`hitConsequences`, `Kill`, `DoDeath`, and `die` APIs. If the native reaction
+`hitConsequences` API and requests native death by setting health to zero;
+it does not call `Kill`, `DoDeath`, or `die`. If the native reaction
 path returns without changing health, Extinction applies the same
 `AnimalData.getHealthLoss(...)` species multiplier as a controlled fallback;
 it never spawns a substitute corpse.
