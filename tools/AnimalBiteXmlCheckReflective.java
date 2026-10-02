@@ -1,160 +1,129 @@
 import java.io.File;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import org.w3c.dom.Element;
 
-/** Uses the installed game's parsers and condition evaluator, without launching a world. */
+/** Tests native mod-file discovery, XML inheritance and animation selection; no rendered world. */
 public final class AnimalBiteXmlCheckReflective {
-    private static final String ACTIVE = "ExtinctionAnimalBiteActive";
-    private static Object variables;
-    private static Method setBoolean;
-    private static Method clearVariables;
-    private static Object context;
-    private static Class<?> stateClass;
-    private static Class<?> transitionClass;
     private static int assertions;
-
     private static void check(boolean result, String message) {
         if (!result) throw new AssertionError(message);
         assertions++;
     }
 
-    private static void reset(String... enabled) throws Exception {
-        clearVariables.invoke(variables);
-        for (String name : new String[] { ACTIVE, "bClient", "bDead", "bOnFloor", "hashitreaction",
-                "bAttack", "isFacingTarget", "bLunge", "bPathfind", "bMoving", "bMovingNetwork",
-                "ZombieBiteDone", "bEatBodyTarget", "bCanSeeTarget", "useRagdollVehicleCollision" }) {
-            setBoolean.invoke(variables, name, false);
-        }
-        for (String name : enabled) setBoolean.invoke(variables, name, true);
-    }
-
-    private static boolean passes(Object transition, Object state) throws Exception {
-        return (boolean) transitionClass.getMethod("passes", context.getClass(), stateClass)
-                .invoke(transition, context, state);
-    }
-
-    private static Object loadState(Path path, String name) throws Exception {
-        Object state = stateClass.getConstructor(String.class).newInstance(name);
-        stateClass.getMethod("parse", File.class).invoke(state, path.toFile());
-        stateClass.getMethod("sortTransitions").invoke(state);
-        return state;
-    }
-
     @SuppressWarnings("unchecked")
-    private static List<Object> transitions(Object state) throws Exception {
-        return (List<Object>) stateClass.getField("transitions").get(state);
-    }
-
     public static void main(String[] args) throws Exception {
         Path media = Path.of(args[0]).toAbsolutePath();
-        Class<?> sourceClass = Class.forName("zombie.core.skinnedmodel.advancedanimation.AnimationVariableSource");
-        variables = sourceClass.getConstructor().newInstance();
-        setBoolean = sourceClass.getMethod("setVariable", String.class, boolean.class);
-        clearVariables = sourceClass.getMethod("clearVariables");
-        Class<?> ownerClass = Class.forName("zombie.core.skinnedmodel.advancedanimation.IAnimatable");
-        Object owner = Proxy.newProxyInstance(ownerClass.getClassLoader(), new Class<?>[] { ownerClass },
-            (proxy, method, values) -> {
-                if (method.getName().equals("getActionContext")) return context;
-                if (method.getName().equals("getUID")) return "ExtinctionXmlTest";
-                try { return sourceClass.getMethod(method.getName(), method.getParameterTypes()).invoke(variables, values); }
-                catch (NoSuchMethodException ignored) {
-                    if (method.getReturnType() == boolean.class) return false;
-                    if (method.getReturnType() == int.class) return 0;
-                    return null;
-                }
-            });
-        context = Class.forName("zombie.characters.action.ActionContext").getConstructor(ownerClass).newInstance(owner);
+        Path probe = Path.of(args[1]).toAbsolutePath();
+        Class<?> fsClass = Class.forName("zombie.ZomboidFileSystem");
+        Object fs = fsClass.getField("instance").get(null);
+        Object baseFolder = fsClass.getField("base").get(fs);
+        baseFolder.getClass().getMethod("set", File.class).invoke(baseFolder, new File("."));
+        Map<String, String> fileMap = (Map<String, String>) fsClass.getField("activeFileMap").get(fs);
+        String overrideKey = "media/actiongroups/zombie/idle/to_attack.xml";
+        fileMap.put(overrideKey, probe.toString());
         Class<?> conditionClass = Class.forName("zombie.characters.action.IActionCondition");
-        Class<?> factoryInterface = Class.forName("zombie.characters.action.IActionCondition$IFactory");
         Object factory = Class.forName("zombie.characters.action.conditions.CharacterVariableCondition$Factory")
                 .getConstructor().newInstance();
-        Method register = conditionClass.getMethod("registerFactory", String.class, factoryInterface);
+        Method register = conditionClass.getMethod("registerFactory", String.class,
+                Class.forName("zombie.characters.action.IActionCondition$IFactory"));
         register.invoke(null, "isTrue", factory);
         register.invoke(null, "isFalse", factory);
-        register.invoke(null, "equals", factory);
-        stateClass = Class.forName("zombie.characters.action.ActionState");
-        transitionClass = Class.forName("zombie.characters.action.ActionTransition");
-        for (String stateName : new String[] { "idle", "lunge", "thump", "turnalerted", "walktoward", "pathfind" }) {
-            String fileName = stateName.equals("walktoward") ? "to_lunge.xml"
-                    : stateName.equals("pathfind") ? "to_idle.xml" : "to_attack.xml";
-            Object state = loadState(media.resolve("actiongroups/zombie/" + stateName + "/" + fileName), stateName);
-            List<Object> rules = transitions(state);
-            check(rules.size() == (stateName.equals("pathfind") ? 3 : 2), "Missing native transition: " + stateName);
-            Object custom = rules.get(0);
-            check("attack".equals(transitionClass.getMethod("getTransitionTo").invoke(custom)), "Priority: " + stateName);
-            reset(ACTIVE);
-            check(passes(custom, state), "Animal attack did not enter: " + stateName);
-            reset();
-            check(!passes(custom, state), "Animal attack active without flag: " + stateName);
-            for (String blocker : new String[] { "bClient", "bDead", "bOnFloor", "hashitreaction" }) {
-                reset(ACTIVE, blocker);
-                check(!passes(custom, state), "Ignored blocker " + blocker + ": " + stateName);
-            }
-            reset("bAttack", "isFacingTarget", "bLunge");
-            check(passes(rules.get(1), state), "Native behavior changed: " + stateName);
-            System.out.println("OK przejscia: " + stateName);
-        }
-        Object attack = loadState(media.resolve("actiongroups/zombie/attack/to_idle.xml"), "attack");
-        List<Object> exitRules = transitions(attack);
-        check(exitRules.size() == 4, "Missing attack exit branches");
-        reset(ACTIVE, "ZombieBiteDone");
-        for (Object rule : exitRules) check(!passes(rule, attack), "Premature animal attack exit");
-        reset("ZombieBiteDone");
-        check(exitRules.stream().anyMatch(rule -> {
-            try { return passes(rule, attack); } catch (Exception e) { throw new RuntimeException(e); }
-        }), "Native attack exit not restored");
-        sourceClass.getMethod("clearVariable", String.class).invoke(variables, ACTIVE);
-        check(exitRules.stream().anyMatch(rule -> {
-            try { return passes(rule, attack); } catch (Exception e) { throw new RuntimeException(e); }
-        }), "Native attack exit not restored with missing custom variable");
+        Class<?> actionStateClass = Class.forName("zombie.characters.action.ActionState");
+        Object actionState = actionStateClass.getConstructor(String.class).newInstance("idle");
+        actionStateClass.getMethod("parse", File.class).invoke(actionState, Path.of(overrideKey).toAbsolutePath().toFile());
+        List<?> rules = (List<?>) actionStateClass.getField("transitions").get(actionState);
+        check(rules.size() == 1 && "attack".equals(rules.get(0).getClass()
+                .getMethod("getTransitionTo").invoke(rules.get(0))), "Native absolute-path behavior changed");
+        Element relative = (Element) Class.forName("zombie.util.PZXmlUtil").getMethod("parseXml", String.class)
+                .invoke(null, overrideKey);
+        check("ExtinctionProbe".equals(relative.getElementsByTagName("transitionTo").item(0).getTextContent()),
+                "Relative override not resolved");
+        fileMap.remove(overrideKey);
+        System.out.println("OK odtworzenie bledu: absolutne sciezki actiongroups pomijaja nadpisanie moda.");
+
+        Class<?> visitorClass = Class.forName("zombie.ZomboidFileSystem$IWalkFilesVisitor");
+        Method discover = fsClass.getDeclaredMethod("walkGameAndModFilesInternal", File.class, String.class,
+                boolean.class, visitorClass);
+        discover.setAccessible(true);
+        Class<?> sourceClass = Class.forName("zombie.core.skinnedmodel.advancedanimation.AnimationVariableSource");
+        Object variables = sourceClass.getConstructor().newInstance();
+        Method bool = sourceClass.getMethod("setVariable", String.class, boolean.class);
+        Method string = sourceClass.getMethod("setVariable", String.class, String.class);
         Class<?> nodeClass = Class.forName("zombie.core.skinnedmodel.advancedanimation.AnimNode");
-        Object node = nodeClass.getMethod("Parse", String.class).invoke(null,
-                media.resolve("AnimSets/zombie/attack/ExtinctionAnimalBite.xml").toString());
-        check(node != null, "Native animation parser failed");
-        check("Zombie_Bite_Success".equals(nodeClass.getField("animName").get(node)), "Wrong animation clip");
-        check(nodeClass.getField("conditionPriority").getInt(node) == 100, "Wrong node priority");
-        check(!nodeClass.getField("isLooped").getBoolean(node), "Animation must not loop");
-        Method conditions = nodeClass.getMethod("checkConditions",
-                Class.forName("zombie.core.skinnedmodel.advancedanimation.IAnimationVariableSource"));
-        reset();
-        check(!(boolean) conditions.invoke(node, variables), "Animation active without flag");
-        reset(ACTIVE);
-        check((boolean) conditions.invoke(node, variables), "Animation not selected with flag");
-        Object nativeStart = nodeClass.getMethod("Parse", String.class).invoke(null,
-                Path.of("media/AnimSets/zombie/attack/start.xml").toAbsolutePath().toString());
-        check((int) nodeClass.getMethod("compareSelectionConditions", nodeClass).invoke(node, nativeStart) > 0,
-                "Custom animation does not outrank native start");
+        Class<?> variableSource = Class.forName("zombie.core.skinnedmodel.advancedanimation.IAnimationVariableSource");
+        Method parse = nodeClass.getMethod("Parse", String.class);
+        Method conditions = nodeClass.getMethod("checkConditions", variableSource);
         Class<?> animStateClass = Class.forName("zombie.core.skinnedmodel.advancedanimation.AnimState");
-        Object animState = animStateClass.getConstructor().newInstance();
-        animStateClass.getMethod("addNode", nodeClass).invoke(animState, nativeStart);
-        animStateClass.getMethod("addNode", nodeClass).invoke(animState, node);
-        sourceClass.getMethod("setVariable", String.class, String.class).invoke(variables, "AttackOutcome", "start");
-        sourceClass.getMethod("setVariable", String.class, String.class).invoke(variables, "AttackType", "bite");
-        sourceClass.getMethod("setVariable", String.class, float.class).invoke(variables, "targetSeenTime", 10f);
-        Method select = animStateClass.getMethod("getAnimNodes",
-                Class.forName("zombie.core.skinnedmodel.advancedanimation.IAnimationVariableSource"), List.class);
-        List<?> selected = (List<?>) select.invoke(animState, variables, new java.util.ArrayList<>());
-        check(selected.size() == 1 && selected.get(0) == node, "Native selector did not choose animal bite exclusively");
-        sourceClass.getMethod("clearVariable", String.class).invoke(variables, ACTIVE);
-        selected = (List<?>) select.invoke(animState, variables, new java.util.ArrayList<>());
-        check(selected.size() == 1 && selected.get(0) == nativeStart, "Native selector did not restore ordinary attack");
-        List<?> events = (List<?>) nodeClass.getField("events").get(node);
-        check(events.size() == 3, "Missing animation events");
-        String[] eventFlags = { "ExtinctionAnimalBiteStarted=true", "ExtinctionAnimalBiteContact=true", "ExtinctionAnimalBiteDone=true" };
-        for (String flag : eventFlags) {
-            Object event = events.stream().filter(value -> {
-                try { return flag.equals(value.getClass().getField("parameterValue").get(value)); }
-                catch (Exception e) { throw new RuntimeException(e); }
-            }).findFirst().orElseThrow(() -> new AssertionError("Missing event: " + flag));
-            check("SetVariable".equals(event.getClass().getField("eventName").get(event)), "Player-only event present");
-            if (flag.contains("Contact")) {
-                check("PERCENTAGE".equals(event.getClass().getField("time").get(event).toString()), "Wrong contact type");
-                check(Math.abs(event.getClass().getField("timePc").getFloat(event) - 0.2f) < 0.001f, "Wrong contact time");
-            } else check((flag.contains("Started") ? "START" : "END")
-                    .equals(event.getClass().getField("time").get(event).toString()), "Wrong event time");
+        Method addNode = animStateClass.getMethod("addNode", nodeClass);
+        Method select = animStateClass.getMethod("getAnimNodes", variableSource, List.class);
+        for (String state : new String[] { "idle", "turnalerted", "walktoward", "pathfind", "lunge", "thump", "attack" }) {
+            List<File> discovered = new ArrayList<>();
+            Object visitor = Proxy.newProxyInstance(visitorClass.getClassLoader(), new Class<?>[] { visitorClass },
+                (proxy, method, values) -> {
+                    if (method.getName().equals("visit")) {
+                        File file = (File) values[0];
+                        if (file.isFile() && file.getName().equals("ExtinctionAnimalBite.xml")) discovered.add(file);
+                    }
+                    return null;
+                });
+            discover.invoke(fs, media.getParent().toFile(), "media/AnimSets/zombie/" + state, false, visitor);
+            check(discovered.size() == 1, "Native file walker missed mod node in " + state);
+            Object node = parse.invoke(null, discovered.get(0).getAbsolutePath());
+            check(node != null, "Native parser failed: " + state);
+            check("Zombie_Bite_Success".equals(nodeClass.getField("animName").get(node)), "Wrong clip: " + state);
+            check(nodeClass.getField("conditionPriority").getInt(node) == 100, "Wrong priority: " + state);
+            check(!nodeClass.getField("isLooped").getBoolean(node), "Bite loops: " + state);
+            check(!nodeClass.getField("useDeferredMovement").getBoolean(node), "Bite permits walking: " + state);
+            check(nodeClass.getField("stopAnimOnExit").getBoolean(node), "Interrupted bite track not stopped: " + state);
+            sourceClass.getMethod("clearVariables").invoke(variables);
+            for (String name : new String[] { "bDead", "bOnFloor", "hashitreaction" }) bool.invoke(variables, name, false);
+            check(!(boolean) conditions.invoke(node, variables), "Missing active flag selects bite: " + state);
+            bool.invoke(variables, "ExtinctionAnimalBiteActive", true);
+            check((boolean) conditions.invoke(node, variables), "Bite not selected: " + state);
+            for (String blocker : new String[] { "bDead", "bOnFloor", "hashitreaction" }) {
+                bool.invoke(variables, blocker, true);
+                check(!(boolean) conditions.invoke(node, variables), "Ignored interruption: " + state + " " + blocker);
+                bool.invoke(variables, blocker, false);
+            }
+            Object animationState = animStateClass.getConstructor().newInstance();
+            try (var nativeFiles = Files.list(Path.of("media/AnimSets/zombie/" + state))) {
+                for (Path file : nativeFiles.filter(p -> p.toString().endsWith(".xml")).toList()) {
+                    Object vanilla = parse.invoke(null, file.toAbsolutePath().toString());
+                    check(vanilla != null, "Vanilla XML failed: " + file);
+                    addNode.invoke(animationState, vanilla);
+                }
+            }
+            addNode.invoke(animationState, node);
+            string.invoke(variables, "AttackOutcome", "start");
+            string.invoke(variables, "AttackType", "bite");
+            sourceClass.getMethod("setVariable", String.class, float.class).invoke(variables, "targetSeenTime", 10f);
+            List<?> selected = (List<?>) select.invoke(animationState, variables, new ArrayList<>());
+            check(selected.size() == 1 && selected.get(0) == node, "Native selector did not choose bite exclusively: " + state);
+            sourceClass.getMethod("clearVariable", String.class).invoke(variables, "ExtinctionAnimalBiteActive");
+            selected = (List<?>) select.invoke(animationState, variables, new ArrayList<>());
+            check(!selected.contains(node), "Custom animation remains after flag cleared: " + state);
+            List<?> events = (List<?>) nodeClass.getField("events").get(node);
+            check(events.size() == 3, "Wrong event count: " + state);
+            for (String suffix : new String[] { "Started", "Contact", "Done" }) {
+                Object event = events.stream().filter(value -> {
+                    try { return ("ExtinctionAnimalBite" + suffix + "=true")
+                            .equals(value.getClass().getField("parameterValue").get(value)); }
+                    catch (Exception e) { throw new RuntimeException(e); }
+                }).findFirst().orElseThrow(() -> new AssertionError("Missing event " + suffix + ": " + state));
+                check("SetVariable".equals(event.getClass().getField("eventName").get(event)), "Player-only event: " + state);
+                String timing = suffix.equals("Contact") ? "PERCENTAGE" : suffix.equals("Started") ? "START" : "END";
+                check(timing.equals(event.getClass().getField("time").get(event).toString()), "Wrong event timing: " + state);
+                if (suffix.equals("Contact")) check(Math.abs(event.getClass().getField("timePc").getFloat(event) - 0.2f) < 0.001f,
+                        "Wrong contact time: " + state);
+            }
+            System.out.println("OK wykrycie pliku, dziedziczenie XML i wybor animacji: " + state);
         }
-        System.out.println("OK parser gry i warunki animacji: " + assertions + " sprawdzen. Renderowanie w grze nie bylo testowane.");
+        System.out.println("OK " + assertions + " sprawdzen natywnych klas. Renderowanie i trasa w swiecie nie byly testowane.");
     }
 }

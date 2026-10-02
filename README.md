@@ -181,6 +181,8 @@ Enabling the mod adds an **Extinction** page to the sandbox settings.
 - Used only by Natural Extinction.
 - Any ordinary zombie may proactively target a nearby living animal, just as it targets a living human. Biological reserve controls whether the zombie feeds from the resulting corpse; it no longer prevents the attack itself. If Build 42 has already made a zombie pursue an animal, Extinction adopts that native target and completes the otherwise missing attack.
 - The zombie enters the game's native `spotted(...)` detection path for targeting and pursuit. A dedicated animation node plays the game's `Zombie_Bite_Success` clip, with damage applied once when that clip reports its contact event. This bypasses the player-only collision event that rejects `IsoAnimal`, without accessing Lua-inaccessible Java fields or writing the read-only `bAttack` callback. A missing animation event does not silently inflict damage. A lethal bite sets health to exactly zero and leaves native animal death and corpse creation to the engine. Bite reach scales with the animal's native corpse-size value.
+- The bite node is available in the native idle, alerted-turn, walk, pathfinding, lunge, thump, and attack animation states. It does not require action-group XML overrides, which the Build 42.21 Windows loader bypasses through absolute installation paths. The animation has no root movement, and normal nodes are selected again when the bite flag is cleared.
+- Pursuit preserves an existing route to the animal rather than cancelling and restarting it every tick. Retry checks are limited to once per second and do not interrupt native door-thumping or climbing actions. Actual indoor route navigation remains an in-game test.
 - Beta builds write a bounded set of `[Extinction] Animal attack ...` trace lines to `console.txt`, covering target acquisition, animation request, actual animation start, contact damage, completion timeout, and death.
 - Full animal animation and multiplayer validation remains a required in-game test.
 
@@ -222,7 +224,7 @@ Enable **Extinction** when creating a new world. When using Project A-Life, enab
 ## Version and validation
 
 - Target game version: **Project Zomboid Build 42.20+**.
-- Mod version: **1.1.0-beta.14**.
+- Mod version: **1.1.0-beta.15**.
 - Lua syntax is checked with the Kahlua parser shipped with the local game installation.
 - Events and Java methods are verified directly against the local `projectzomboid.jar`.
 - Sandbox-option and translation files are validated statically.

@@ -17,6 +17,7 @@ local FOOD_SEARCH_RADIUS = 10
 local ANIMAL_SEARCH_RADIUS = 16
 local ANIMAL_ATTACK_INTERVAL_MS = 1800
 local ANIMAL_ATTACK_TIMEOUT_MS = 4000
+local ANIMAL_PURSUIT_CHECK_MS = 1000
 local ANIMAL_ATTACK_HIT_GRACE = 1.25
 local ANIMAL_ATTACK_TRACE_LIMIT = 160
 local ANIMAL_CORPSE_TRACE_LIMIT = 40
@@ -105,6 +106,7 @@ NS.bodyChunkKeys = NS.bodyChunkKeys or weakKeyTable()
 NS.nextFoodSearch = NS.nextFoodSearch or weakKeyTable()
 NS.feedingBodies = NS.feedingBodies or weakKeyTable()
 NS.animalTargets = NS.animalTargets or weakKeyTable()
+NS.nextAnimalPursuitMs = NS.nextAnimalPursuitMs or weakKeyTable()
 NS.nextAnimalAttackMs = NS.nextAnimalAttackMs or weakKeyTable()
 NS.nextAnimalSearch = NS.nextAnimalSearch or weakKeyTable()
 NS.pendingAnimalBites = NS.pendingAnimalBites or weakKeyTable()
@@ -733,6 +735,7 @@ end
 local function clearAnimalTarget(zombie)
     endAnimalBite(zombie)
     NS.animalTargets[zombie] = nil
+    NS.nextAnimalPursuitMs[zombie] = nil
     NS.nextAnimalAttackMs[zombie] = nil
 end
 
@@ -763,9 +766,8 @@ local function animalAttackPathIsClear(zombie, animal)
     local animalSquare = animal:getSquare()
     if zombieSquare == nil or animalSquare == nil then return false end
     if zombieSquare.isSomethingTo == nil then return true end
-    local blocked = false
-    pcall(function() blocked = zombieSquare:isSomethingTo(animalSquare) end)
-    return not blocked
+    local ok, blocked = pcall(function() return zombieSquare:isSomethingTo(animalSquare) end)
+    return ok and not blocked
 end
 
 local function animalDistance(zombie, animal)
@@ -783,13 +785,31 @@ local function animalIsInBiteRange(zombie, animal, extraRange, requireClearPath)
     return requireClearPath == false or animalAttackPathIsClear(zombie, animal)
 end
 
-local function refreshAnimalPursuit(zombie, animal)
+local function refreshAnimalPursuit(zombie, animal, nowMs)
     if zombie:getTarget() ~= animal then
         pcall(function() zombie:setTarget(animal) end)
     end
     pcall(function() zombie:setTargetSeenTime(10) end)
-    if not animalIsInBiteRange(zombie, animal) then
-        pcall(function() zombie:pathToCharacter(animal) end)
+    if animalIsInBiteRange(zombie, animal) then return end
+    if nowMs < (tonumber(NS.nextAnimalPursuitMs[zombie]) or 0) then return end
+    NS.nextAnimalPursuitMs[zombie] = nowMs + ANIMAL_PURSUIT_CHECK_MS
+
+    local action = tostring(zombie:getActionStateName() or "")
+    -- Repeated pathToCharacter calls cancel native route requests. Preserve an
+    -- existing character-goal path, including its obstacle and climbing actions.
+    if action == "thump" or string.find(action, "climb", 1, true) ~= nil then return end
+    if action == "pathfind" or action == "walktoward" or action == "lunge" then
+        local ok, followingAnimal = pcall(function()
+            local route = zombie:getPathFindBehavior2()
+            return route ~= nil and route:getTargetChar() == animal and not route:getIsCancelled()
+        end)
+        if ok and followingAnimal then return end
+    end
+    local requested = pcall(function() zombie:pathToCharacter(animal) end)
+    if NS.animalAttackTraceCount < ANIMAL_ATTACK_TRACE_LIMIT then
+        NS.animalAttackTraceCount = NS.animalAttackTraceCount + 1
+        print("[Extinction] Animal attack pursuit route requested: action=" .. action
+            .. " callOk=" .. tostring(requested))
     end
 end
 
@@ -807,9 +827,9 @@ local function beginAnimalBite(zombie, animal, nowMs)
     zombie:clearVariable("ExtinctionAnimalBiteStarted")
     zombie:clearVariable("ExtinctionAnimalBiteContact")
     zombie:clearVariable("ExtinctionAnimalBiteDone")
-    -- The XML transition enters the real action graph, which also starts its
-    -- AttackState. The dedicated node reuses Zombie_Bite_Success and reports
-    -- contact/completion without the player-only AttackCollisionCheck event.
+    -- The bite node is available in each ordinary pursuit/idle animation state.
+    -- Unlike action-group overrides, the AnimSets loader enumerates mod files.
+    -- It reports contact without the player-only AttackCollisionCheck event.
     zombie:setVariable("ExtinctionAnimalBiteActive", true)
     NS.pendingAnimalBites[zombie] = {
         animal = animal,
@@ -914,6 +934,7 @@ function NS.processAnimalAttacks()
         if NS.animalAttackModeActive then
             for zombie, _ in pairs(NS.pendingAnimalBites) do endAnimalBite(zombie) end
             NS.animalTargets = weakKeyTable()
+            NS.nextAnimalPursuitMs = weakKeyTable()
             NS.nextAnimalAttackMs = weakKeyTable()
             NS.nextAnimalSearch = weakKeyTable()
             NS.pendingAnimalBites = weakKeyTable()
@@ -941,12 +962,15 @@ function NS.processAnimalAttacks()
             clearAnimalTarget(zombie)
         else
             if pending ~= nil then
+                if currentTarget == nil then zombie:setTarget(animal) end
+                zombie:faceThisObject(animal)
                 local animationStarted = animalBiteFlag(zombie, "ExtinctionAnimalBiteStarted")
                 if animationStarted and not pending.animationLogged then
                     pending.animationLogged = true
                     if NS.animalAttackTraceCount < ANIMAL_ATTACK_TRACE_LIMIT then
                         NS.animalAttackTraceCount = NS.animalAttackTraceCount + 1
-                        print("[Extinction] Animal attack animation playing: Zombie_Bite_Success")
+                        print("[Extinction] Animal attack animation playing: Zombie_Bite_Success action="
+                            .. tostring(zombie:getActionStateName()))
                     end
                 end
                 if animationStarted and not pending.damageApplied
@@ -969,7 +993,7 @@ function NS.processAnimalAttacks()
                     endAnimalBite(zombie)
                 end
             else
-                refreshAnimalPursuit(zombie, animal)
+                refreshAnimalPursuit(zombie, animal, nowMs)
                 local nextAttack = tonumber(NS.nextAnimalAttackMs[zombie]) or 0
                 if nowMs >= nextAttack and animalIsInBiteRange(zombie, animal) then
                     beginAnimalBite(zombie, animal, nowMs)

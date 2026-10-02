@@ -18,7 +18,7 @@ function animal:hitConsequences(weapon, attacker, ignored, damage, final)
     self.hits = self.hits + 1
     self.health = self.health - damage
 end
-local zombie = { variables = {}, target = animal }
+local zombie = { variables = {}, target = animal, action = "idle", pathRequests = 0 }
 function zombie:getSquare() return square end
 function zombie:isDead() return false end
 function zombie:getTarget() return self.target end
@@ -31,8 +31,17 @@ function zombie:setTargetSeenTime(value) end
 function zombie:clearVariable(name) self.variables[name] = nil end
 function zombie:setVariable(name, value) self.variables[name] = value end
 function zombie:GetVariable(name) return tostring(self.variables[name] or "") end
-function zombie:getActionStateName() return "attack" end
-function zombie:getAnimationStateName() return "attack" end
+function zombie:getActionStateName() return self.action end
+function zombie:getAnimationStateName() return self.action end
+local route = { cancelled = false }
+function route:getTargetChar() return animal end
+function route:getIsCancelled() return self.cancelled end
+function zombie:getPathFindBehavior2() return route end
+function zombie:pathToCharacter(value)
+    self.pathRequests = self.pathRequests + 1
+    self.action = "pathfind"
+    route.cancelled = false
+end
 local function step() NS.processAnimalAttacks() end
 local function event(suffix) zombie:setVariable("ExtinctionAnimalBite" .. suffix, true) end
 NS.animalTargets[zombie] = animal
@@ -81,3 +90,43 @@ step()
 assert(NS.pendingAnimalBites[zombie] == nil and zombie.variables.ExtinctionAnimalBiteActive == nil,
     "Disabling hunting left animation active")
 print("OK cykl ugryzienia: brak obrazen przed kontaktem, jeden hit, timeout, zgon i wylaczenie opcji")
+
+SandboxVars.Extinction.HuntAnimals = true
+function animal:getX() return 10 end
+NS.animalTargets[zombie] = animal
+zombie.action = "idle"
+now = now + 2000
+step()
+assert(zombie.pathRequests == 1, "Initial pursuit did not request a path")
+for index = 1, 100 do
+    now = now + 100
+    step()
+end
+assert(zombie.pathRequests == 1, "Repeated ticks cancelled existing character route")
+route.cancelled = true
+now = now + 1100
+step()
+assert(zombie.pathRequests == 2, "Cancelled route was not retried")
+zombie.action = "thump"
+for index = 1, 20 do
+    now = now + 100
+    step()
+end
+assert(zombie.pathRequests == 2, "Pursuit interrupted obstacle action")
+zombie.action = "climbthroughwindow"
+now = now + 1100
+step()
+assert(zombie.pathRequests == 2, "Pursuit interrupted climbing")
+zombie.action = "idle"
+now = now + 1100
+step()
+assert(zombie.pathRequests == 3, "Idle zombie did not restart pursuit")
+function animal:getX() return 1 end
+function square:isSomethingTo(value) return true end
+now = now + 1100
+step()
+assert(NS.pendingAnimalBites[zombie] == nil, "Attack started through obstacle")
+local healthBeforeObstacle = animal.health
+step()
+assert(animal.health == healthBeforeObstacle, "Obstacle test caused damage")
+print("OK poscig: zachowanie trasy, ograniczone ponowienia, przeszkody, wspinanie i brak ataku przez sciane")

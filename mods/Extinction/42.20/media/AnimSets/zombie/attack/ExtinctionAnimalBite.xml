@@ -8,10 +8,27 @@
     <m_BlendOutTime>0.20</m_BlendOutTime>
     <m_SpeedScale>1.04</m_SpeedScale>
     <m_SyncTrackingEnabled>false</m_SyncTrackingEnabled>
+    <m_useDeferredMovement>false</m_useDeferredMovement>
+    <m_StopAnimOnExit>true</m_StopAnimOnExit>
     <m_Conditions>
         <m_Name>ExtinctionAnimalBiteActive</m_Name>
         <m_Type>BOOL</m_Type>
         <m_Value>true</m_Value>
+    </m_Conditions>
+    <m_Conditions>
+        <m_Name>bDead</m_Name>
+        <m_Type>BOOL</m_Type>
+        <m_Value>false</m_Value>
+    </m_Conditions>
+    <m_Conditions>
+        <m_Name>bOnFloor</m_Name>
+        <m_Type>BOOL</m_Type>
+        <m_Value>false</m_Value>
+    </m_Conditions>
+    <m_Conditions>
+        <m_Name>hashitreaction</m_Name>
+        <m_Type>BOOL</m_Type>
+        <m_Value>false</m_Value>
     </m_Conditions>
     <m_Events>
         <m_EventName>SetVariable</m_EventName>

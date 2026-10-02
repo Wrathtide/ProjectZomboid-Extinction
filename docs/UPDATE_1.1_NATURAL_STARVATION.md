@@ -265,8 +265,8 @@ The beta implementation:
 3. passes the animal through the same native `spotted(...)` detection path used
    for living character targets, establishing the target and pursuit;
 4. triggers the animal's native flee response;
-5. enters the native `attack` action state through XML transitions and selects
-   a dedicated `Zombie_Bite_Success` node. Its contact event applies damage once
+5. selects a dedicated `Zombie_Bite_Success` node in the existing idle, alerted,
+   walking, pathfinding, lunge, thump, or attack animation state. Its contact event applies damage once
    through `IsoAnimal.hitConsequences(...)`, bypassing the vanilla player-only
    collision event. No Lua-inaccessible Java field or read-only `bAttack`
    callback is modified;
@@ -282,8 +282,16 @@ during the bite wind-up from cancelling every otherwise valid hit. Beta builds
 also emit a bounded attack trace for target, wind-up, hit or miss, damage, and
 death. Start, contact, and completion flags originate from the animation node,
 not an estimated wind-up timer. A missing contact event causes no damage and
-the pending attack is released after a bounded timeout. Existing vanilla
-transition branches remain available when the custom flag is absent.
+the pending attack is released after a bounded timeout. No action-group override
+is required: Build 42.21's Windows action loader reads absolute installation
+paths and bypasses relative mod overrides. The mod-file-aware AnimSets loader
+does discover the dedicated nodes, including their shared XML inheritance.
+With the bite flag absent, normal animation selection is unchanged.
+
+Animal pursuit no longer requests a replacement path every tick. The native
+character-goal route remains intact, and retry checks are limited to once per
+second without interrupting thumping or climbing. Actual indoor navigation and
+rendered animation must still be verified in a game session.
 
 Runtime testing must still confirm attack damage, animation alignment, fleeing,
 multiplayer authority, and corpse creation for every supported animal size.
