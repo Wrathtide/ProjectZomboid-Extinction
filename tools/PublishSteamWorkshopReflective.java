@@ -13,7 +13,8 @@ public final class PublishSteamWorkshopReflective {
     public static void main(String[] args) throws Exception {
         if (args.length < 1 || args.length > 2) throw new IllegalArgumentException("Podaj katalog pakietu i opcjonalnie --publish.");
         boolean publish = args.length == 2 && args[1].equals("--publish");
-        if (args.length == 2 && !publish) throw new IllegalArgumentException("Nieznana opcja.");
+        boolean checkApi = args.length == 2 && args[1].equals("--check-api");
+        if (args.length == 2 && !publish && !checkApi) throw new IllegalArgumentException("Nieznana opcja.");
         Path staging = Path.of(args[0]).toRealPath();
         Path expected = Path.of(System.getProperty("user.home"), "Zomboid", "Workshop", "Extinction").toRealPath();
         if (!staging.equals(expected)) throw new IllegalArgumentException("Nieoczekiwany katalog pakietu.");
@@ -22,6 +23,11 @@ public final class PublishSteamWorkshopReflective {
         Path preview = staging.resolve("preview.png");
         if (Files.size(preview) >= 1024 * 1024) throw new IllegalStateException("Podglad przekracza limit Workshop.");
 
+        Class<?> files = Class.forName("zombie.ZomboidFileSystem");
+        Object fileSystem = files.getField("instance").get(null);
+        Object baseFolder = files.getField("base").get(fileSystem);
+        baseFolder.getClass().getMethod("set", java.io.File.class)
+            .invoke(baseFolder, Path.of(".").toAbsolutePath().toFile());
         Class<?> itemClass = Class.forName("zombie.core.znet.SteamWorkshopItem");
         Object item = itemClass.getConstructor(String.class).newInstance(staging.toString());
         if (!Boolean.TRUE.equals(itemClass.getMethod("readWorkshopTxt").invoke(item))) throw new IllegalStateException("Nie odczytano metadanych Workshop.");
@@ -31,7 +37,7 @@ public final class PublishSteamWorkshopReflective {
         String description = (String) itemClass.getMethod("getDescription").invoke(item);
         if (description.getBytes(StandardCharsets.UTF_8).length >= 8000) throw new IllegalStateException("Opis przekracza limit Workshop.");
         System.out.println("OK pakiet 1.1.0, istniejacy przedmiot, publiczna widocznosc, podglad i opis.");
-        if (!publish) return;
+        if (!publish && !checkApi) return;
 
         // Capture the genuine success/error callbacks through the game's Lua
         // event dispatcher, rather than treating submitUpdate()==true as success.
@@ -48,7 +54,9 @@ public final class PublishSteamWorkshopReflective {
         manager.getField("env").set(null, environment);
         manager.getField("thread").set(null, thread);
         Class<?> callerClass = Class.forName("se.krka.kahlua.integration.LuaCaller");
-        Object caller = callerClass.getConstructor(platformInterface).newInstance(platform);
+        Class<?> converterClass = Class.forName("se.krka.kahlua.converter.KahluaConverterManager");
+        Object converter = converterClass.getConstructor().newInstance();
+        Object caller = callerClass.getConstructor(converterClass).newInstance(converter);
         manager.getField("caller").set(null, caller);
         Method rawGet = tableClass.getMethod("rawget", Object.class);
         Method compile = Class.forName("se.krka.kahlua.luaj.compiler.LuaCompiler")
@@ -68,6 +76,23 @@ public final class PublishSteamWorkshopReflective {
             ((List<Object>) event.getClass().getField("callbacks").get(event))
                 .add(rawGet.invoke(environment, callbacks[i]));
         }
+        events.getMethod("triggerEvent", String.class, Object.class)
+            .invoke(null, eventNames[0], Boolean.FALSE);
+        if (!Boolean.TRUE.equals(rawGet.invoke(environment, "WorkshopDone"))) {
+            throw new IllegalStateException("Nie dziala odbior potwierdzenia Workshop; niczego nie wyslano.");
+        }
+        Method rawSet = tableClass.getMethod("rawset", Object.class, Object.class);
+        rawSet.invoke(environment, "WorkshopDone", null);
+        rawSet.invoke(environment, "WorkshopLegal", null);
+        events.getMethod("triggerEvent", String.class, Object.class)
+            .invoke(null, eventNames[1], Integer.valueOf(15));
+        if (rawGet.invoke(environment, "WorkshopError") == null) {
+            throw new IllegalStateException("Nie dziala odbior bledu Workshop; niczego nie wyslano.");
+        }
+        rawSet.invoke(environment, "WorkshopDone", null);
+        rawSet.invoke(environment, "WorkshopError", null);
+        System.out.println("OK odbior zdarzen sukcesu i bledu z natywnego interfejsu Workshop.");
+        if (checkApi) return;
         Class<?> steam = Class.forName("zombie.core.znet.SteamUtils");
         Class<?> workshop = Class.forName("zombie.core.znet.SteamWorkshop");
         boolean initialized = false;

@@ -11,11 +11,10 @@ $remote = (git -C $projectRoot remote get-url origin).Trim()
 if ($LASTEXITCODE -ne 0 -or $remote -ne $expectedRemote) {
     throw 'Nieoczekiwane repozytorium docelowe.'
 }
-$commit = (git -C $projectRoot rev-parse HEAD).Trim()
-$tagCommit = (git -C $projectRoot rev-parse "$tag^{commit}").Trim()
-if ($LASTEXITCODE -ne 0 -or $tagCommit -ne $commit) {
-    throw 'Tag wydania nie wskazuje bieżącego commitu.'
-}
+$commit = (git -C $projectRoot rev-parse "$tag^{commit}").Trim()
+if ($LASTEXITCODE -ne 0) { throw 'Nie znaleziono tagu wydania.' }
+git -C $projectRoot merge-base --is-ancestor $commit HEAD
+if ($LASTEXITCODE -ne 0) { throw 'Bieżąca historia nie zawiera wydawanego tagu.' }
 $asset = Get-Item -LiteralPath $AssetPath
 if ($asset.Name -ne 'Extinction-1.1.0.zip') { throw 'Nieoczekiwana nazwa pakietu.' }
 $credential = @{}
@@ -41,7 +40,8 @@ try {
     $repo = Invoke-RestMethod -Uri $api -Headers $headers
     if ($repo.visibility -ne 'public') { throw 'Repozytorium nie jest publiczne; nie zmieniono jego widoczności.' }
     $remoteMain = Invoke-RestMethod -Uri "$api/commits/main" -Headers $headers
-    if ($remoteMain.sha -ne $commit) { throw 'GitHub main nie wskazuje zweryfikowanego wydania.' }
+    git -C $projectRoot merge-base --is-ancestor $commit $remoteMain.sha
+    if ($LASTEXITCODE -ne 0) { throw 'GitHub main nie zawiera zweryfikowanego wydania.' }
     $remoteTag = Invoke-RestMethod -Uri "$api/git/ref/tags/$tag" -Headers $headers
     if ($remoteTag.object.type -ne 'commit' -or $remoteTag.object.sha -ne $commit) {
         throw 'Tag na GitHub nie wskazuje zweryfikowanego commitu.'
@@ -52,7 +52,8 @@ try {
     } catch {
         if ([int]$_.Exception.Response.StatusCode -ne 404) { throw }
     }
-    $notes = Get-Content -LiteralPath (Join-Path $projectRoot 'docs/RELEASE_1.1.0.md') -Raw
+    $notes = (git -C $projectRoot show ($tag + ':docs/RELEASE_1.1.0.md')) -join "`n"
+    if ($LASTEXITCODE -ne 0) { throw 'Nie odczytano opisu z tagu wydania.' }
     foreach ($name in @('UPDATE_1.1_NATURAL_STARVATION.md', 'STEAM_DESCRIPTION.txt')) {
         $notes = $notes.Replace("($name)", "(https://github.com/$repository/blob/$tag/docs/$name)")
     }
