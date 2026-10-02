@@ -15,7 +15,7 @@ public final class PublishSteamWorkshopReflective {
         boolean publish = args.length == 2 && args[1].equals("--publish");
         if (args.length == 2 && !publish) throw new IllegalArgumentException("Nieznana opcja.");
         Path staging = Path.of(args[0]).toRealPath();
-        Path expected = Path.of("C:/Users/kwasn/Zomboid/Workshop/Extinction").toRealPath();
+        Path expected = Path.of(System.getProperty("user.home"), "Zomboid", "Workshop", "Extinction").toRealPath();
         if (!staging.equals(expected)) throw new IllegalArgumentException("Nieoczekiwany katalog pakietu.");
         String info = Files.readString(staging.resolve("Contents/mods/Extinction/42.20/mod.info"));
         if (!info.lines().anyMatch(s -> s.equals("modversion=1.1.0"))) throw new IllegalStateException("Niepoprawna wersja pakietu.");
