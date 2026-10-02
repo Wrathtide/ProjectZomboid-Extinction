@@ -1,12 +1,12 @@
 # Extinction 1.1 Project — Natural Extinction
 
-> Status: design approved; implementation beta is in progress on
-> `feature/natural-starvation-1.1`. Static API and Lua syntax checks pass.
-> Runtime validation in Project Zomboid is still required before release.
+> Status: implemented for update 1.1.0. The author accepted the latest
+> animal-pursuit and attack behaviour after single-player testing.
+> Automated regression checks complement, but do not replace, gameplay tests.
 >
 > This document supersedes the earlier multi-parameter Natural Starvation
-> proposal. The released fixed-timeline mode remains unchanged until every
-> mandatory validation gate has passed.
+> proposal. Existing fixed-timeline saves retain their original rules.
+> See [release notes](RELEASE_1.1.0.md) for scope and validation limitations.
 
 ## Vision
 
@@ -35,15 +35,27 @@ Non-negotiable rules:
 
 | Setting | Type | Default | Behaviour |
 |---|---:|---:|---|
-| Natural Extinction | Checkbox | Off | Enables the biological-reserve simulation. |
+| Natural Extinction | Checkbox | Off | Enables the biological-reserve simulation for a new world; the choice is persisted. |
 | Days Until Complete Zombie Extinction | Integer | 21 | Used only in fixed mode. Locked and ignored in natural mode. |
 | Days From Death to Skeletonization | Integer | 180 | Remains available in both modes. |
-| Zombies Hunt Living Animals | Checkbox | On | Allows hungry zombies to select living animals as prey and completes native animal pursuits by ordinary zombies in natural mode. |
+| Zombies Hunt Living Animals | Checkbox | On | Independent option in either mode for new worlds. Ordinary zombies pursue and bite animals without requiring biological-reserve processing. |
 | Testing: Show Zombie Biological State | Checkbox | Off | Draws a compact state label over nearby active zombies. |
 | Testing: Show Corpse Nutrition | Checkbox | Off | Draws the remaining raw and usable nutritional value over nearby corpses. |
 
 Natural Extinction remains disabled by default. The fixed extinction schedule
 continues to be the predictable standard mode.
+
+### Existing saves
+
+World mode and animal-hunting choices are persisted in `ExtinctionWorldSettings`
+when `OnInitGlobalModData` identifies a new world. Existing unmarked saves are
+not inferred from their age: they stay in the original fixed mode with new
+hunting disabled, and retain their death dates and skeleton-loot handling.
+Changing new sandbox defaults cannot migrate these worlds into natural mode.
+Previously tested natural-mode worlds can retain that mode only if they already
+contain non-empty persistent natural-sector records and the natural option was
+enabled. Empty records do not qualify. No save file or population setting is
+rewritten to implement this choice.
 
 ## One persistent parameter per active zombie
 
@@ -81,7 +93,7 @@ The curve is informed by:
 - the short-term importance of hydration;
 - a small long tail of unusually resilient individuals.
 
-The implemented beta curve is continuous inside these population bands:
+The implemented curve is continuous inside these population bands:
 
 | Population share | Baseline reserve before environmental support |
 |---:|---:|
@@ -255,7 +267,7 @@ The current Build 42 API supports the required path:
 - the active cell exposes its animal list;
 - a dead animal becomes an `IsoDeadBody`.
 
-The beta implementation:
+The implementation:
 
 1. searches the game's active animal list only when a hungry zombie found no
    usable corpse; if Build 42 has already assigned an animal target to any
@@ -278,7 +290,7 @@ The bite threshold is a centre-to-centre distance scaled with the animal's
 native corpse-size value. Build 42's generic moving-object width does not scale
 with the visible body of large livestock and therefore cannot be used as the
 attack boundary. A short post-animation allowance prevents fleeing movement
-during the bite wind-up from cancelling every otherwise valid hit. Beta builds
+during the bite wind-up from cancelling every otherwise valid hit. The mod
 also emit a bounded attack trace for target, wind-up, hit or miss, damage, and
 death. Start, contact, and completion flags originate from the animation node,
 not an estimated wind-up timer. A missing contact event causes no damage and
@@ -458,7 +470,7 @@ The overlay:
 - Temporary object tables use weak references.
 - Save/reload cannot reroll an initialized reserve.
 
-Dense-city profiling remains required before release.
+Dense-city profiling remains an outstanding validation task, not a claimed result.
 
 ## Feasibility audit
 
@@ -540,18 +552,15 @@ Dense-city profiling remains required before release.
 
 ## Release policy
 
-Natural Extinction will ship only after mandatory runtime gates pass.
+Update 1.1.0 is a regular update, not a prerelease. Natural Extinction remains
+disabled by default, and existing fixed-timeline worlds remain in their original
+mode. Animal hunting is a separate choice for new worlds.
 
-The final option does not use the word “experimental”, but removing that label
-does not lower the validation standard.
-
-Until runtime validation is complete:
-
-- fixed-timeline Extinction remains the stable released mode;
-- Natural Extinction remains disabled by default;
-- version 1.1 remains a local/feature-branch beta;
-- Steam Workshop is not updated;
-- `main` is not replaced.
+The author accepted the latest animal-hunting behaviour in single-player.
+Automated compatibility and animation checks are recorded separately. Unchecked
+items in the validation checklist below/above remain unperformed; regular release
+status does not imply exhaustive testing of every species, multiplayer, or
+dense-city performance. See the release notes for the precise evidence boundary.
 
 ## References
 
@@ -589,11 +598,8 @@ Project Zomboid Build 42 API:
 
 ## Approval boundary
 
-The design is approved for implementation on the feature branch.
-
-This approval does not authorize:
-
-- merging version 1.1 into `main`;
-- creating a public GitHub release;
-- replacing the Steam Workshop build;
-- presenting unperformed in-game tests as completed.
+The author approved preparing and deploying update 1.1 as a regular update,
+preserving existing saves and making animal hunting independent of extinction
+mode. GitHub and Steam descriptions are prepared separately. Publication status
+must be reported from actual service responses, not inferred from local files.
+Unperformed gameplay tests must never be presented as completed.

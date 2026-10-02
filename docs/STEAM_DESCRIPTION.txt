@@ -1,0 +1,82 @@
+[h1]EXTINCTION[/h1]
+[i]The dead will not walk forever.[/i]
+
+[b]Face a true apocalypse.[/b]
+Humanity is on the brink of extinction. Become one of the few survivors who will rebuild the world from the ground up.
+
+The constant fear of zombie attacks gradually gives way to silence, isolation, and—with an NPC mod—conflict with the few survivors who remain. The catastrophe does not leave a clean, empty map. It leaves a world that remembers.
+
+[h2]NEW IN 1.1 — TWO PATHS TO EXTINCTION[/h2]
+[b]THE ORIGINAL TIMELINE[/b]
+Choose how many days the outbreak lasts. Each ordinary zombie receives a permanent random death date between apocalypse day 0 and your deadline: 21 days by default.
+
+[b]NATURAL EXTINCTION — OPTIONAL[/b]
+Enable it when creating a new world. Zombies gradually exhaust a biological reserve, benefit from rain, and feed on existing human, zombie, or animal corpses. Food is finite, decomposition reduces it, and each feeding cycle loses part of the available resources.
+
+Some die early. Others survive longer by finding food. There is no guaranteed final day—and the possibility of a survivor keeps the silence uneasy.
+
+[list]
+[*]Off by default: the original timeline remains available.
+[*]Locks the fixed extinction deadline when selected.
+[*]One biological-reserve value per zombie, capped at 21 baseline days even after feeding or rain.
+[*]A simplified gameplay model, not a medical simulation.
+[*]Zombies never attack other living zombies for food.
+[*]Rotten flesh loses nutritional value, but is not toxic to zombies.
+[/list]
+
+[h2]THE HUNT CONTINUES[/h2]
+[b]Zombies hunt living animals[/b] is a separate checkbox. It works with either extinction mode in new worlds: pursuit, bites, native animal death, and corpses. Natural mode also lets hungry zombies feed on those remains.
+
+[h2]THE LANDSCAPE REMEMBERS[/h2]
+[list]
+[*]Silent ambient deaths: no player attack, kill credit, or combat XP.
+[*]Historical death dates in regions explored long after the outbreak.
+[*]Configurable age-based skeletonization: 180 days by default; 0 disables the age timer.
+[*]In natural mode, fully consumed corpses become matching native skeletons, even if the age timer is disabled.
+[*]New-world skeletonization preserves hard loot and bag contents while removing selected clothing and soft bags.
+[*]Optional diagnostic overlays show zombie reserve, corpse resources, and time until age-based skeletonization.
+[/list]
+
+[h2]YOUR SANDBOX. YOUR POPULATION.[/h2]
+Extinction does not replace the vanilla population system or rewrite its settings. Population, peak day, distribution, migration, respawn, start date, apocalypse age, and corpse sickness remain your choices.
+
+Starting six months after the apocalypse with a one-month fixed extinction deadline? Ordinary zombies are already past their death dates. Respawned zombies after that deadline become historically dated remains.
+
+Standard corpse-removal settings still matter: disable removal if you want lasting remains. Extinction specifically preserves native animal skeletons against later animal-rot deletion.
+
+[h2]UPDATING AN EXISTING WORLD[/h2]
+[b]Existing fixed-timeline Extinction saves keep their original rules and death dates.[/b]
+The update does not silently enable natural extinction or animal hunting in those worlds. Original skeleton-loot handling is retained too.
+
+[b]Start a new world to select natural extinction or the new hunting option.[/b]
+Your choices are saved with that world. Natural-mode development saves already containing active sector records retain their existing mode.
+
+Keep a backup of important saves. Do not activate both a local test copy and the Workshop copy at the same time. Use this mod at your own risk.
+
+[h2]LET THE SURVIVORS TELL THEIR STORIES[/h2]
+An NPC mod is strongly recommended for the late game. Compatibility protections are specifically implemented for [b]Project A-Life [ALIFE NPCS][/b]: marked NPC characters are not killed or skeletonized by Extinction. Unmarked ordinary zombies still follow extinction rules. Other NPC mods have not been verified.
+
+[h2]AT A GLANCE[/h2]
+[list]
+[*]Version: 1.1.0
+[*]Project Zomboid Build 42.20+
+[*]Natural extinction: optional, off by default, new worlds only
+[*]Animal hunting: separate new-world option in either mode
+[*]Fixed deadline: 21 days by default, configurable from 0 to 3650
+[*]Skeletonization: 180 days by default, configurable from 0 to 3650
+[*]Sandbox languages: English and Polish
+[*]License: MIT
+[/list]
+The latest animal-hunting behaviour was accepted after single-player testing. Exhaustive animal-species, multiplayer, and dense-city performance testing are not certified.
+
+[h2]INSPIRATION & AUTHORSHIP[/h2]
+Inspired by Stephen King's [i]The Stand[/i] ([i]Bastion[/i] in Polish) and Robert J. Szmidt's [i]Samotność Anioła Zagłady[/i], later republished as [i]Samotność Anioła Zagłady. Adam[/i]. This independent fan project is not an adaptation, contains no assets from those books, and is not affiliated with the authors, their publishers, The Indie Stone, or Valve.
+
+I am not a programmer. The idea, project direction, gameplay design, and final creative decisions are human work. The code was built with AI under human direction and tested with human feedback.
+
+[url=https://github.com/Wrathtide/ProjectZomboid-Extinction]SOURCE CODE, RELEASES & DOCUMENTATION ON GITHUB[/url]
+[url=https://github.com/Wrathtide/ProjectZomboid-Extinction/blob/main/docs/UPDATE_1.1_NATURAL_STARVATION.md]UPDATE 1.1 — MECHANICS & RESEARCH[/url]
+
+[i]First the screams disappear.
+Then the footsteps.
+Then nothing remains but the dead—and whoever is still alive.[/i]

@@ -28,7 +28,7 @@ local function updateExtinctionControls(screen)
         deadlineControl:setTextRGBA(1.0, 1.0, 1.0, 1.0)
     end
 
-    setTickBoxEnabled(screen.controls[HUNT_ANIMALS_OPTION], naturalEnabled)
+    setTickBoxEnabled(screen.controls[HUNT_ANIMALS_OPTION], true)
     setTickBoxEnabled(screen.controls[BIOLOGICAL_STATE_OPTION], naturalEnabled)
     setTickBoxEnabled(screen.controls[CORPSE_NUTRITION_OPTION], naturalEnabled)
 end

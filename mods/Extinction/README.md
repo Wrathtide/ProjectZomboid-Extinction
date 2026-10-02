@@ -1,22 +1,23 @@
 # Extinction
 
-**Extinction** is a mod for **Project Zomboid Build 42.20+** that simulates the gradual and permanent extinction of the ordinary zombie population. Every ordinary zombie receives an individual death time, and the world progressively changes from an active outbreak into a mostly empty landscape of corpses and skeletons.
+> **Update 1.1 — Natural Extinction & Animal Hunting**
+>
+> Choose a fixed extinction deadline or optional natural extinction when creating a new world. Animal hunting is a separate option in either mode. Existing fixed-timeline saves retain their original rules and death dates.
+>
+> **[Update 1.1 mechanics and research →](https://github.com/Wrathtide/ProjectZomboid-Extinction/blob/main/docs/UPDATE_1.1_NATURAL_STARVATION.md)** · **[Release notes →](https://github.com/Wrathtide/ProjectZomboid-Extinction/blob/main/docs/RELEASE_1.1.0.md)**
 
-The mod is intended for a **new world** and is compatible with **Project A-Life [ALIFE NPCS]**.
+**Extinction** is a mod for **Project Zomboid Build 42.20+** that simulates the gradual decline of the ordinary zombie population. In fixed mode, each receives an individual death time; in natural mode, survival depends on a finite biological reserve and available resources. The world progressively changes from an active outbreak into a mostly empty landscape of corpses and skeletons.
 
-## Update 1.1 beta — Natural Extinction
+The mod is compatible with **Project A-Life [ALIFE NPCS]**. A **new world is required to start natural extinction**, not to continue an existing fixed-timeline Extinction save after updating.
 
-The local 1.1 beta adds an optional natural survival model alongside the stable
-fixed deadline. Each active zombie stores one biological reserve, and each
-corpse used as food stores one shared resource value. Rain, temperature,
-activity, corpse feeding, and systemic failure affect survival. Human, zombie,
-and animal corpses are eligible; living animal hunting is separately
-configurable. Zombies never attack living zombies for food. Biological reserve
-is capped at 21 days even after feeding or rain.
+## Updating an existing save
 
-Two disabled-by-default testing checkboxes display either a compact
-biological-state label over nearby zombies or the remaining raw and usable
-nutritional value and skeletonization countdown over nearby corpses.
+- Keep the same mod ID, `Extinction`. Do not install a second copy alongside it.
+- Existing fixed-timeline worlds stay in fixed mode. Their stored death dates, configured deadline, skeletonization delay, and original skeleton-loot behaviour are preserved.
+- New default options do not silently activate starvation or animal hunting in those worlds.
+- Choose natural extinction and animal hunting when creating a new world. The two choices are saved with the world and cannot switch its simulation merely because sandbox defaults change later.
+- Development saves that already used natural extinction keep it when persistent sector records prove the mode was used. An empty sector table does not trigger this migration.
+- Back up important saves before any mod update. Compatibility tests exercise the actual Lua code with simulated game objects; they are not a guarantee against unrelated game or mod problems.
 
 ## Inspiration
 
@@ -29,7 +30,7 @@ Extinction is an independent fan-made project. It is not an adaptation, contains
 
 ## Main features
 
-- Gradual extinction of all ordinary zombies.
+- Gradual extinction of ordinary zombies, with a guaranteed deadline in fixed mode and resource-dependent survival in natural mode.
 - Configurable extinction deadline, defaulting to **21 days after the apocalypse**.
 - One immutable random death time per zombie.
 - Correct handling of worlds that begin months after the apocalypse.
@@ -41,6 +42,13 @@ Extinction is an independent fan-made project. It is not an adaptation, contains
 - Ordinary zombies created by vanilla or other mods remain subject to extinction.
 - Full compatibility with standard Project Zomboid sandbox population and corpse settings.
 - English and Polish in-game sandbox-option text.
+- Optional natural-extinction mode with one persistent biological reserve per zombie.
+- A 21-day hard cap on the composite biological reserve, including after feeding or rain; this is a simplified gameplay model, not a medical prediction.
+- Rain and temperature affect survival without adding separate hydration fields.
+- Persistent native corpse-eating behaviour for human, zombie, and animal remains: an assigned corpse is resumed after the native eating timer or a temporary interruption until its resource is exhausted.
+- Optional pursuit and attack of living animals through the game's native detection and targeting path.
+- Consumed bodies preserve hard loot while selected clothing and soft bags are removed.
+- Separate opt-in overlays for zombie biological state and corpse nutrition.
 
 ## Extinction schedule
 
@@ -104,13 +112,16 @@ Ordinary zombie corpses are tracked until they reach the configured age. The def
 When the delay has elapsed:
 
 - the detailed corpse is replaced by a native Project Zomboid skeleton,
-- clothing, inventory, and identifying visual details are discarded,
+- selected clothing and soft containers are discarded,
+- nested and hard items are transferred to the skeleton or dropped on the same square,
 - the position and historical death age are retained,
-- the resulting skeleton is no longer actively processed by the mod.
+- the resulting human skeleton leaves the active body-processing list.
 
 This is a deliberate performance compromise. Hundreds of detailed bodies can be expensive, while native skeletons preserve the visual history of the disaster at a lower runtime cost.
 
-Setting the skeletonization delay to **0** disables automatic skeletonization.
+Setting the skeletonization delay to **0** disables age-based skeletonization. In natural mode, exhausting a corpse's nutritional resource still turns it into remains. Animal bodies use the engine's animal-skeleton path; human and zombie bodies use its human-skeleton path.
+
+The new loot-preservation rules apply to new 1.1 worlds and existing natural-mode development worlds. Older fixed-timeline saves retain the original skeletonization behaviour, including its original loot handling. Human skeletons leave the ordinary processing list; animal skeletons receive a lightweight preservation pass to prevent later animal rot stages from deleting them. Standard corpse-removal settings otherwise remain the player's choice.
 
 ## Full standard-sandbox compatibility
 
@@ -127,7 +138,7 @@ In particular:
 - Corpse sickness uses exactly the standard value selected by the player.
 - Start month, start day, start year, and `TimeSinceApo` remain untouched.
 
-The mod adds only two independent settings of its own: the extinction deadline and the skeletonization delay. Neither setting substitutes for a vanilla population option.
+The mod adds its own natural-mode, fixed-deadline, skeletonization, animal-hunting, and testing controls. None substitutes for a vanilla population option. Enabling Natural Extinction disables the fixed deadline without changing any standard population setting.
 
 ## Project A-Life compatibility
 
@@ -157,12 +168,49 @@ Compatibility has been specifically implemented and checked for **Project A-Life
 
 Enabling the mod adds an **Extinction** page to the sandbox settings.
 
+### Natural extinction
+
+- Default: `Off`
+- Selected for a **new world**, then persisted as that world's mode.
+- When disabled, Extinction uses the stable fixed extinction deadline.
+- When enabled, the fixed deadline field is locked and ignored.
+- Every zombie stores one composite biological reserve.
+- The initial reserve follows a survival curve dominated by 3–7 days, with only a 0.5% tail reaching 18–21 days.
+- The reserve can never exceed 21 days, including after corpse feeding or rain.
+- Rain, temperature, activity, corpse feeding, and reserve-dependent systemic failure affect survival.
+- Hungry zombies may use existing, non-skeletal human, zombie, or animal corpses.
+- Once feeding begins, the assigned corpse is remembered and feeding resumes after the native eating timer or a temporary interruption until no resource remains.
+- A fully consumed human, zombie, or animal corpse is converted through the matching native skeleton path. Extinction also prevents Build 42's later animal-rot stage from deleting native animal skeletons.
+- Zombies never attack living zombies to obtain food.
+- Resources removed from a corpse are shared and cannot be consumed twice.
+- Digestion, metabolism, and decomposition permanently remove resources from the system.
+- Late-created zombies are aged from the beginning of the apocalypse.
+- Exact off-screen routes are approximated through persistent 50×50-tile sector timing.
+
+### Zombies hunt living animals
+
+- Default: `On`
+- Independent of Natural Extinction: available in both modes for new worlds.
+- Any ordinary zombie may proactively target a nearby living animal, just as it targets a living human. Biological reserve controls whether the zombie feeds from the resulting corpse; it no longer prevents the attack itself. If Build 42 has already made a zombie pursue an animal, Extinction adopts that native target and completes the otherwise missing attack.
+- The zombie enters the game's native `spotted(...)` detection path for targeting and pursuit. A dedicated animation node plays the game's `Zombie_Bite_Success` clip, with damage applied once when that clip reports its contact event. This bypasses the player-only collision event that rejects `IsoAnimal`, without accessing Lua-inaccessible Java fields or writing the read-only `bAttack` callback. A missing animation event does not silently inflict damage. A lethal bite sets health to exactly zero and leaves native animal death and corpse creation to the engine. Bite reach scales with the animal's native corpse-size value.
+- The bite node is available in the native idle, alerted-turn, walk, pathfinding, lunge, thump, and attack animation states. It does not require action-group XML overrides, which the Build 42.21 Windows loader bypasses through absolute installation paths. The animation has no root movement, and normal nodes are selected again when the bite flag is cleared.
+- Pursuit preserves an existing route to the animal rather than cancelling and restarting it every tick. Retry checks are limited to once per second and do not interrupt native door-thumping or climbing actions. The latest indoor pursuit and attack behaviour was accepted by the author after testing in the game.
+- The mod writes a bounded set of `[Extinction] Animal attack ...` diagnostic trace lines to `console.txt`.
+- Every animal species and multiplayer have not received exhaustive runtime validation.
+
+### Testing overlays
+
+- **Show zombie biological state** displays reserve, approximate baseline survival time, and current state over nearby zombies.
+- **Show corpse nutrition** displays the remaining raw and usable nutritional value plus the time left until skeletonization over nearby human, zombie, and animal corpses.
+- Both options default to `Off`.
+
 ### Days until complete zombie extinction
 
 - Default: `21`
 - Minimum: `0`
 - Maximum: `3650`
 - `0` means immediate extinction.
+- Ignored and locked when natural calorie distribution is enabled.
 
 The entire probability distribution scales automatically to the selected value.
 
@@ -174,7 +222,6 @@ The entire probability distribution scales automatically to the selected value.
 - `0` disables automatic skeletonization.
 
 This delay is calculated separately from each corpse's real or historical death date.
-Animal corpses use their native animal skeleton models, and Extinction keeps those skeletons from being deleted by Build 42's final animal-rot stage.
 
 ## Installation
 
@@ -189,13 +236,13 @@ Enable **Extinction** when creating a new world. When using Project A-Life, enab
 ## Version and validation
 
 - Target game version: **Project Zomboid Build 42.20+**.
-- Mod version: **1.1.0-beta.15**.
+- Mod version: **1.1.0**.
 - Lua syntax is checked with the Kahlua parser shipped with the local game installation.
 - Events and Java methods are verified directly against the local `projectzomboid.jar`.
 - Sandbox-option and translation files are validated statically.
 - Project A-Life marker compatibility was checked against Project A-Life 1.3.0 for Build 42.20.
 
-Runtime testing in a real world remains a separate validation stage. A new save is recommended because an existing world may already contain population and corpses generated under different rules.
+The author confirmed the latest animal-hunting behaviour in a real single-player game. Regression tests also run the actual Lua modules in the game's Kahlua interpreter with simulated world data and game objects. They cover saved mode selection, old death dates, late-start worlds, A-Life protection, independent hunting, animation-contact damage, and interrupted pursuit. Native animation-graph checks remain distinct from visual tests. Full multiplayer, every animal species, long-running real-save migration, and dense-city performance are not certified.
 
 ## Project structure
 

@@ -91,6 +91,27 @@ assert(NS.pendingAnimalBites[zombie] == nil and zombie.variables.ExtinctionAnima
     "Disabling hunting left animation active")
 print("OK cykl ugryzienia: brak obrazen przed kontaktem, jeden hit, timeout, zgon i wylaczenie opcji")
 
+SandboxVars.Extinction.NaturalStarvation = false
+SandboxVars.Extinction.HuntAnimals = true
+NS.animalTargets[zombie] = animal
+now = now + 2000
+step()
+assert(NS.pendingAnimalBites[zombie] ~= nil, "Fixed mode did not request animal bite")
+local previousHits = animal.hits
+event("Started")
+event("Contact")
+step()
+assert(animal.hits == previousHits + 1, "Fixed mode did not damage animal at contact")
+event("Done")
+step()
+SandboxVars.Extinction.HuntAnimals = false
+SandboxVars.Extinction.NaturalStarvation = true
+NS.animalTargets[zombie] = animal
+now = now + 2000
+step()
+assert(NS.pendingAnimalBites[zombie] == nil, "Natural mode bypassed disabled hunting")
+print("OK niezaleznosc polowania: kontakt w trybie harmonogramu, blokada po odznaczeniu opcji")
+
 SandboxVars.Extinction.HuntAnimals = true
 function animal:getX() return 10 end
 NS.animalTargets[zombie] = animal

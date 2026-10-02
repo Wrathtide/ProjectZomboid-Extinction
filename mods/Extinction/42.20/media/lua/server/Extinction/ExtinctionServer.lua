@@ -1,6 +1,7 @@
 Extinction = Extinction or {}
 
 local QE = Extinction
+QE.WorldSettings = require "Extinction/ExtinctionWorldSettings"
 local HOURS_PER_DAY = 24
 local DAYS_PER_MONTH = 30
 local DEFAULT_EXTINCTION_DAYS = 21
@@ -123,6 +124,7 @@ local function trackBody(body)
     end
     if QE.NaturalStarvation ~= nil then QE.NaturalStarvation.trackBody(body) end
     if body.isAnimal ~= nil and body:isAnimal() then
+        if QE.WorldSettings.isLegacyFixedWorld() then return end
         local skeleton = false
         if body.isAnimalSkeleton ~= nil then
             pcall(function() skeleton = body:isAnimalSkeleton() end)
@@ -202,6 +204,8 @@ local function processZombie(zombie)
 
     if apocalypseAgeHours() >= deathAgeHours then
         convertZombieToBody(zombie, deathAgeHours)
+    elseif QE.NaturalStarvation ~= nil then
+        QE.NaturalStarvation.processAnimalHuntingZombie(zombie)
     end
 end
 
@@ -382,7 +386,9 @@ local function createSkeletonFromBody(body)
         data.ExtinctionSkeletonized = true
     end
 
-    transferPreservedLoot(body, skeleton, square)
+    if not QE.WorldSettings.isLegacyFixedWorld() then
+        transferPreservedLoot(body, skeleton, square)
+    end
 
     QE.trackedBodies[body] = nil
     if QE.NaturalStarvation ~= nil then QE.NaturalStarvation.untrackBody(body) end
@@ -472,6 +478,8 @@ end
 
 QE.NaturalStarvation = require "Extinction/ExtinctionNaturalStarvation"
 QE.NaturalStarvation.configure({
+    naturalModeEnabled = QE.WorldSettings.isNaturalEnabled,
+    animalHuntingEnabled = QE.WorldSettings.isHuntingEnabled,
     apocalypseAgeHours = apocalypseAgeHours,
     bodyDeathAgeHours = bodyDeathAgeHours,
     safeModData = safeModData,
@@ -492,7 +500,10 @@ Events.LoadGridsquare.Add(scanSquareForBodies)
 Events.LoadChunk.Add(scanChunkForBodies)
 Events.OnObjectAdded.Add(trackBody)
 Events.OnDeadBodySpawn.Add(trackBody)
-Events.OnInitGlobalModData.Add(QE.NaturalStarvation.initGlobalData)
+Events.OnInitGlobalModData.Add(function(isNewGame)
+    QE.WorldSettings.initialize(isNewGame)
+    QE.NaturalStarvation.initGlobalData()
+end)
 Events.OnGameStart.Add(onGameStart)
 Events.OnServerStarted.Add(onGameStart)
 

@@ -149,11 +149,17 @@ local function optionBoolean(name, fallback)
 end
 
 local function naturalModeEnabled()
+    if NS.context ~= nil and NS.context.naturalModeEnabled ~= nil then
+        return NS.context.naturalModeEnabled()
+    end
     return optionBoolean("NaturalStarvation", false)
 end
 
 local function animalHuntingEnabled()
-    return naturalModeEnabled() and optionBoolean("HuntAnimals", true)
+    if NS.context ~= nil and NS.context.animalHuntingEnabled ~= nil then
+        return NS.context.animalHuntingEnabled()
+    end
+    return optionBoolean("HuntAnimals", true)
 end
 
 local function clearKeys(data, keys)
@@ -930,7 +936,7 @@ local function finishAnimalBite(zombie, pending)
 end
 
 function NS.processAnimalAttacks()
-    if not naturalModeEnabled() or not animalHuntingEnabled() then
+    if not animalHuntingEnabled() then
         if NS.animalAttackModeActive then
             for zombie, _ in pairs(NS.pendingAnimalBites) do endAnimalBite(zombie) end
             NS.animalTargets = weakKeyTable()
@@ -1046,7 +1052,6 @@ local function chooseFoodAndPrey(zombie, data, currentHour)
     local currentTarget = zombie.getTarget ~= nil and zombie:getTarget() or nil
     if currentTarget ~= nil and type(instanceof) == "function"
             and instanceof(currentTarget, "IsoAnimal") then
-        targetAnimal(zombie, currentTarget)
         return
     end
 
@@ -1080,9 +1085,26 @@ local function chooseFoodAndPrey(zombie, data, currentHour)
         end
     end
 
-    -- Living animals are prey in the same sense as living human characters:
-    -- reserve controls corpse feeding, not whether a zombie attacks a living
-    -- creature. Keep this search separate from the heavier corpse-food scan.
+end
+
+function NS.processAnimalHuntingZombie(zombie)
+    if not animalHuntingEnabled() or zombie == nil then return end
+    if NS.context ~= nil and NS.context.belongsToProjectALife(zombie) then return end
+    if zombie.isDead ~= nil and zombie:isDead() then return end
+    if NS.feedingBodies[zombie] ~= nil then return end
+    local currentTarget = zombie.getTarget ~= nil and zombie:getTarget() or nil
+    if currentTarget ~= nil then
+        if type(instanceof) == "function" and instanceof(currentTarget, "IsoAnimal") then
+            targetAnimal(zombie, currentTarget)
+        else
+            clearAnimalTarget(zombie)
+        end
+        return
+    end
+    if zombie.isCrawling ~= nil and zombie:isCrawling() then return end
+    if zombie.getEatBodyTarget ~= nil and zombie:getEatBodyTarget() ~= nil then return end
+    local currentHour = NS.context ~= nil and NS.context.apocalypseAgeHours() or 0
+    -- Hunting does not read or initialize biological reserve or corpse food.
     local nextAnimalSearch = tonumber(NS.nextAnimalSearch[zombie]) or 0
     if currentHour < nextAnimalSearch then return end
     NS.nextAnimalSearch[zombie] = currentHour + ANIMAL_SEARCH_INTERVAL_HOURS
@@ -1122,7 +1144,7 @@ function NS.configure(context)
 end
 
 function NS.initGlobalData()
-    ensureSectorRoot()
+    if naturalModeEnabled() then ensureSectorRoot() end
 end
 
 function NS.isEnabled()
@@ -1211,7 +1233,8 @@ function NS.markStarvationCorpse(body, sourceData, deathAgeHours)
 end
 
 function NS.processZombie(zombie)
-    if zombie == nil or NS.context == nil or NS.context.belongsToProjectALife(zombie) then
+    if not naturalModeEnabled() or zombie == nil or NS.context == nil
+            or NS.context.belongsToProjectALife(zombie) then
         return
     end
     if zombie.isDead ~= nil and zombie:isDead() then return end
@@ -1244,6 +1267,7 @@ function NS.processZombie(zombie)
     transmitReserveWhenNeeded(zombie, data)
     recordSectorSample(sectorKey, reserve)
     chooseFoodAndPrey(zombie, data, currentHour)
+    NS.processAnimalHuntingZombie(zombie)
 end
 
 function NS.processBodies()
